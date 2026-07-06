@@ -232,3 +232,36 @@ Formato recomendado:
 4. Decisoes D[n], se houver.
 5. Placar agregado.
 6. Proximo passo concreto.
+
+## 7. Saida para loops do Delivery Council
+
+Quando a auditoria for chamada pelo `$learnhouse-delivery-council`, use tambem o sentinel do loop correspondente.
+
+### Planning Adversarial Loop
+
+```md
+PLAN-ADVERSARIAL-VERIFICATION: SATISFEITO | REPLANEJAR | BLOQUEADO
+GAPS-CRITICOS: N
+DECISAO-ESCOLHIDA: [opcao escolhida ou bloqueio]
+PROXIMA-ACAO: [executar | replanejar | pedir decisao]
+REPLAN-REQUEST:
+- gap: [achado REAL que exige mudanca no plano]
+- evidencia: [fonte/codigo/doc/teste que prova o gap]
+- alteracao-obrigatoria: [mudanca objetiva que o plano revisado deve incorporar]
+```
+
+Se retornar `REPLANEJAR`, `REPLAN-REQUEST` e obrigatorio. O reviewer nao replaneja; o Council consome esse bloco e deve registrar `REPLAN-CONSUMED` antes da proxima rodada.
+
+### Adversarial Verification Loop
+
+```md
+ADVERSARIAL-VERIFICATION: SATISFEITO | CORRIGIR | BLOQUEADO
+GAPS-CRITICOS: N
+PROXIMA-ACAO: [corrigir | parar | pedir decisao]
+FIX-REQUEST:
+- gap: [achado REAL BLOQUEANTE/ALTA que exige mudanca na execucao]
+- evidencia: [fonte/codigo/doc/teste/log que prova o gap]
+- alteracao-obrigatoria: [mudanca objetiva que a correcao deve incorporar]
+```
+
+Se retornar `CORRIGIR`, `FIX-REQUEST` e obrigatorio. O reviewer nao corrige; o Council consome esse bloco e deve registrar `FIX-CONSUMED` antes da proxima rodada.

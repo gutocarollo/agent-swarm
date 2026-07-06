@@ -188,11 +188,29 @@ Limite: maximo de 3 rodadas.
 ADVERSARIAL-VERIFICATION: SATISFEITO | CORRIGIR | BLOQUEADO
 GAPS-CRITICOS: N
 PROXIMA-ACAO: [corrigir | parar | pedir decisao]
+FIX-REQUEST:
+- gap: [achado REAL BLOQUEANTE/ALTA que exige mudanca na execucao]
+- evidencia: [fonte/codigo/doc/teste/log que prova o gap]
+- alteracao-obrigatoria: [mudanca objetiva que a correcao deve incorporar]
 ```
 
 ### Criterio de correcao
 
 Corrija sequencialmente e rode nova rodada quando houver gap `REAL` com severidade `BLOQUEANTE` ou `ALTA`.
+
+Se o review retornar `CORRIGIR`, o Council deve corrigir usando o bloco `FIX-REQUEST` como input obrigatorio. O reviewer nao corrige; ele acusa e especifica a mudanca minima. O Council implementa a correcao, registra o que mudou, revalida e so entao roda a proxima rodada de execution review.
+
+Handoff obrigatorio em cada `CORRIGIR`:
+
+```md
+FIX-CONSUMED:
+- source-review-round: <n>
+- gaps-corrigidos: [...]
+- arquivos-alterados: [...]
+- validacao-rodada: [...]
+```
+
+Sem `FIX-REQUEST` do reviewer e sem `FIX-CONSUMED` do Council, a proxima rodada do loop e invalida.
 
 Nao corrija automaticamente:
 
@@ -210,6 +228,12 @@ Pare quando:
 - completar 3 rodadas;
 - sobrar apenas gap `MEDIA`/`BAIXA` aceito explicitamente como pendencia;
 - sobrar bloqueio real fora do alcance da sessao.
+
+Em `CORRIGIR` na rodada final:
+
+- reporte `ADVERSARIAL-LOOP: 3/3, status: PENDENTE`;
+- nao declare `ADVERSARIAL-VERIFICATION: SATISFEITO`;
+- entregue o `FIX-REQUEST` final como proxima acao concreta para o proximo chamado, ou pare com a pendencia declarada.
 
 Na resposta final, inclua:
 

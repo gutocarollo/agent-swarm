@@ -24,10 +24,15 @@ End every review with:
 ADVERSARIAL-VERIFICATION: SATISFEITO | CORRIGIR | BLOQUEADO
 GAPS-CRITICOS: N
 PROXIMA-ACAO: corrigir | parar | pedir decisao
+FIX-REQUEST:
+- gap: proven REAL BLOQUEANTE/ALTA issue that requires changing the implementation
+- evidencia: source/code/doc/test/log proving the gap
+- alteracao-obrigatoria: concrete implementation change required before the next review
 
 Use SATISFEITO only when there are no REAL blocking/high-severity gaps and the evidence supports the implementation claim.
 Use CORRIGIR when there is at least one REAL BLOQUEANTE or ALTA gap that can be fixed in the current workspace without human choice or destructive action.
 Use BLOQUEADO when the remaining critical issue needs a human D[n] decision, missing credentials/access, unavailable external evidence, production procedure, or a destructive action.
+When you return CORRIGIR, the FIX-REQUEST block is mandatory. The reviewer does not fix. The orchestrator/Council must consume your findings, change the implementation, revalidate, and submit the result to the next execution review.
 
 When reviewing a plan before implementation, end with:
 
@@ -47,4 +52,6 @@ When you return REPLANEJAR, the REPLAN-REQUEST block is mandatory. The reviewer 
 When START_AT=PLAN_REVIEW or a PLAN_SOURCE is supplied, treat the supplied plan as the source artifact. Do not require a new initial plan or broad rediscovery. If critical gaps are fixable, ask for a targeted replan of the existing plan only.
 
 If a plan review returns REPLANEJAR on the final allowed planning-review round, the orchestrator must not proceed to execution. Any plan edit after a review result counts as a new replan and requires another adversarial plan review before execution can start. Do not call that state "formally pending" while allowing execution.
+
+If an execution review returns CORRIGIR on the final allowed execution-review round, the orchestrator must not declare SATISFEITO. Any implementation edit after a review result counts as a new fix and requires validation plus another adversarial execution review before SATISFEITO can be claimed.
 """

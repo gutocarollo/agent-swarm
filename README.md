@@ -85,6 +85,10 @@ Em `REPLANEJAR`, a informacao precisa trafegar assim: o reviewer devolve
 `REPLAN-REQUEST`; o Council consome esse bloco, altera o plano e registra
 `REPLAN-CONSUMED`; so depois roda a proxima rodada de `PLAN_REVIEW`.
 
+Em `CORRIGIR`, a informacao trafega do mesmo jeito: o reviewer devolve
+`FIX-REQUEST`; o Council consome esse bloco, corrige a implementacao, registra
+`FIX-CONSUMED`, revalida e so depois roda a proxima rodada de `EXECUTION_REVIEW`.
+
 ```mermaid
 flowchart TD
     A["Prompt + ARGS"] --> B["Resolver START_AT<br/>(AUTO vira PLANNING, PLAN_REVIEW ou EXECUTION)"]
@@ -99,7 +103,7 @@ flowchart TD
     G2 -->|"sim<br/>PLANNING ou PLAN_REVIEW"| P2["PLAN_REVIEW<br/>review adversarial do plano<br/>rodada i = 1"]
     G2 -->|"nao<br/>START_AT=EXECUTION"| P_SKIP["Plan review assumido<br/>resolvido/desnecessario"]
     P2 --> P3{"PLAN-ADVERSARIAL<br/>status"}
-    P3 -->|"REPLANEJAR<br/>i < PLAN_REVIEW_MAX"| P4["Corrigir plano<br/>i = i + 1"]
+    P3 -->|"REPLANEJAR<br/>i < PLAN_REVIEW_MAX"| P4["REPLAN-CONSUMED<br/>corrigir plano<br/>i = i + 1"]
     P4 --> P2
     P3 -->|"REPLANEJAR<br/>i = PLAN_REVIEW_MAX"| PEND["PENDENTE:<br/>limite do plano atingido"]
     P3 -->|"BLOQUEADO"| PBLOCK["BLOQUEADO:<br/>precisa decisao/evidencia"]
@@ -117,7 +121,7 @@ flowchart TD
     F --> G["Review adversarial da execucao<br/>rodada j = 1"]
 
     G --> H{"ADVERSARIAL<br/>status"}
-    H -->|"CORRIGIR<br/>j < EXECUTION_REVIEW_MAX"| I["Corrigir gap REAL<br/>BLOQUEANTE/ALTA<br/>j = j + 1"]
+    H -->|"CORRIGIR<br/>j < EXECUTION_REVIEW_MAX"| I["FIX-CONSUMED<br/>corrigir gap REAL<br/>BLOQUEANTE/ALTA<br/>j = j + 1"]
     I --> F
     H -->|"CORRIGIR<br/>j = EXECUTION_REVIEW_MAX"| EPEND["PENDENTE:<br/>limite da execucao atingido"]
     H -->|"BLOQUEADO"| EBLOCK["BLOQUEADO:<br/>decisao, credencial, prod ou acao destrutiva"]
@@ -223,6 +227,20 @@ Review da execucao:
 ADVERSARIAL-VERIFICATION: SATISFEITO | CORRIGIR | BLOQUEADO
 GAPS-CRITICOS: N
 PROXIMA-ACAO: [corrigir | parar | pedir decisao]
+FIX-REQUEST:
+- gap: [achado REAL BLOQUEANTE/ALTA que exige mudanca na execucao]
+- evidencia: [fonte/codigo/doc/teste/log que prova o gap]
+- alteracao-obrigatoria: [mudanca objetiva que a correcao deve incorporar]
+```
+
+Consumo obrigatorio da correcao:
+
+```md
+FIX-CONSUMED:
+- source-review-round: <n>
+- gaps-corrigidos: [...]
+- arquivos-alterados: [...]
+- validacao-rodada: [...]
 ```
 
 Resumo final esperado:
@@ -243,6 +261,16 @@ Esse par significa que a execucao rodou depois de plano nao aprovado. Se o gap
 do plano foi corrigido apos a segunda rodada, falta uma nova rodada de
 `PLAN_REVIEW` antes da execucao.
 
+Tambem e invalido:
+
+```md
+ADVERSARIAL-LOOP: 3/3, status: PENDENTE
+ADVERSARIAL-VERIFICATION: SATISFEITO
+```
+
+Esse par significa que uma correcao foi exigida no limite do loop, mas a
+execucao foi declarada satisfeita sem nova validacao adversarial.
+
 ## Arquivos Principais
 
 | Arquivo | Funcao |
@@ -262,6 +290,7 @@ do plano foi corrigido apos a segunda rodada, falta uma nova rodada de
 python3 /home/augusto/.codex/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/learnhouse-delivery-council
 python3 /home/augusto/.codex/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/adversarial-review
 python3 /home/augusto/.codex/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/clarification-plan
+python3 -m unittest discover -s tests -v
 python3 - <<'PY'
 import pathlib
 import tomllib

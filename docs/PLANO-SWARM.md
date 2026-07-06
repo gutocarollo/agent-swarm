@@ -1,3 +1,12 @@
+> **Documento historico. Nao use como contrato operacional atual.**
+>
+> O contrato canonico esta em `README.md` e
+> `.agents/skills/learnhouse-delivery-council/SKILL.md`.
+> Este arquivo preserva a decisao inicial Codex-native. Se houver divergencia,
+> o README e a skill vencem. Exemplos copiaveis de loop devem preservar os
+> gates atuais `REPLAN-REQUEST`/`REPLAN-CONSUMED` e
+> `FIX-REQUEST`/`FIX-CONSUMED`.
+
 Sim — **isso adapta bastante o plano**. A restrição “quero usar dentro da extensão Codex no VS Code, logado com minha assinatura ChatGPT Pro, sem API token” muda a resposta para:
 
 ## Não, o Agents SDK não deve ser o caminho principal para o seu caso
@@ -373,7 +382,9 @@ Trabalhe em fases:
 3. Se houver alternativas, escolha automaticamente a melhor por trade-off quando AUTO_DECIDE=true.
 4. Use $clarification-plan apenas se sobrar decisão D[n] realmente bloqueante.
 5. Não implemente decisão D[n] aberta; se START_AT=PLANNING, só implemente depois do plano se AUTO_EXECUTE_AFTER_PLAN=true.
-6. Se START_AT=PLAN_REVIEW, o plano já existe: revise o plano, execute quando o review ficar SATISFEITO e rode review adversarial da execução. Não refaça o planejamento inicial amplo.
+6. Se START_AT=PLAN_REVIEW, o plano já existe: revise o plano, execute apenas quando `PLAN-ADVERSARIAL-VERIFICATION: SATISFEITO` e rode review adversarial da execução. Não refaça o planejamento inicial amplo.
+7. Se o review do plano retornar REPLANEJAR, exija REPLAN-REQUEST, consuma em REPLAN-CONSUMED e rode novo PLAN_REVIEW antes de executar.
+8. Se o review da execução retornar CORRIGIR, exija FIX-REQUEST, corrija em FIX-CONSUMED, revalide e rode novo review da execução antes de SATISFEITO.
 ```
 
 Limites fixos:
@@ -424,7 +435,8 @@ EXECUTION_REVIEW_MAX=3
 AUTO_EXECUTE_AFTER_PLAN=true
 
 TASK:
-Revise o plano existente, execute o que estiver aprovado e rode review adversarial da execução.
+Revise o plano existente, execute apenas se PLAN-ADVERSARIAL-VERIFICATION ficar SATISFEITO e rode review adversarial da execução.
+Se o review retornar REPLANEJAR, devolva REPLAN-REQUEST, consuma em REPLAN-CONSUMED e rode novo PLAN_REVIEW.
 ```
 
 Se o plano estiver colado no prompt, use `PLAN_SOURCE=inline` e adicione:
@@ -476,14 +488,16 @@ Ao terminar a implementação, rode o Adversarial Verification Loop.
 
 Regras:
 1. Rode $adversarial-review ou learnhouse-adversarial-reviewer contra plano, diff, docs, código real e evidências.
-2. Se houver gap REAL BLOQUEANTE ou ALTA que possa ser corrigido sem decisão humana, corrija em sequência.
-3. Depois da correção, rode nova rodada adversarial.
+2. Se houver gap REAL BLOQUEANTE ou ALTA que possa ser corrigido sem decisão humana, o reviewer deve retornar FIX-REQUEST.
+3. O Council corrige consumindo o FIX-REQUEST, registra FIX-CONSUMED, revalida e só então roda nova rodada adversarial.
 4. Repita até o review declarar SATISFEITO ou até completar 3 rodadas.
 5. Pare e declare BLOQUEADO se sobrar decisão D[n], credencial, acesso externo, prod/deploy ou ação destrutiva.
-6. Declare PENDENTE se o limite de 3 rodadas for atingido ou se sobrarem apenas gaps MEDIA/BAIXA aceitos como pendência.
+6. Declare PENDENTE se a rodada 3 ainda retornar CORRIGIR; nesse caso não declare ADVERSARIAL-VERIFICATION: SATISFEITO.
 
 Saída obrigatória:
 ADVERSARIAL-LOOP: <rodadas>/3, status: <SATISFEITO|PENDENTE|BLOQUEADO>
+FIX-REQUEST: [obrigatorio quando status da rodada for CORRIGIR]
+FIX-CONSUMED: [obrigatorio antes da rodada seguinte quando houve CORRIGIR]
 ```
 
 ## Para swarm/subagents quando fizer sentido

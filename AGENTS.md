@@ -13,6 +13,8 @@ Este repositorio publica o pacote Codex-native do LearnHouse Delivery Council.
   `SATISFEITO`; `REPLANEJAR` na rodada final e `PENDENTE` real e bloqueia execucao.
 - Preserve o handoff de replanejamento: reviewer retorna `REPLAN-REQUEST`;
   Council consome e registra `REPLAN-CONSUMED`; sem esses blocos, o loop e invalido.
+- Preserve o handoff de correcao: reviewer retorna `FIX-REQUEST`; Council
+  corrige, revalida e registra `FIX-CONSUMED`; sem esses blocos, o loop e invalido.
 - Nao copie `.claude/CLAUDE.md`, credenciais, dumps, logs, dados de producao ou
   instrucoes privadas de cliente para este repo.
 - Preserve o repo como pacote autocontido: skill orquestradora, skills de apoio,
@@ -27,6 +29,7 @@ Rode:
 python3 /home/augusto/.codex/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/learnhouse-delivery-council
 python3 /home/augusto/.codex/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/adversarial-review
 python3 /home/augusto/.codex/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/clarification-plan
+python3 -m unittest discover -s tests -v
 python3 - <<'PY'
 import pathlib
 import tomllib
