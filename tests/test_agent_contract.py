@@ -40,7 +40,6 @@ AGENTS = "AGENTS.md"
 PLAN_DOC = "docs/PLANO-SWARM.md"
 SCHEMAS = "schemas"
 WITNESS = "verification/witness-fixes.json"
-CI = ".github/workflows/ci.yml"
 
 
 class AgentContractRegressionTest(unittest.TestCase):
@@ -265,13 +264,18 @@ REPLAN-REQUEST:
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("marker missing", result.stdout)
 
-    def test_ci_runs_single_contract_validator(self):
-        workflow = read(CI)
-        self.assertIn("push:", workflow)
-        self.assertIn("pull_request:", workflow)
-        self.assertIn("workflow_dispatch:", workflow)
-        self.assertIn("actions/setup-python@v5", workflow)
-        self.assertIn("python3 scripts/validate_contract.py", workflow)
+    def test_contract_validation_is_local_not_github_actions(self):
+        workflows = ROOT / ".github" / "workflows"
+        workflow_files = []
+        if workflows.exists():
+            workflow_files = list(workflows.glob("*.yml")) + list(workflows.glob("*.yaml"))
+        self.assertEqual(workflow_files, [])
+        readme = read(README)
+        agents = read(AGENTS)
+        self.assertIn("Nao ha GitHub Actions neste pacote", readme)
+        self.assertIn("Nao adicione GitHub Actions", agents)
+        self.assertIn("python3 scripts/validate_contract.py", readme)
+        self.assertIn("python3 scripts/validate_contract.py", agents)
 
     def test_prompt_generator_validates_args(self):
         result = subprocess.run(

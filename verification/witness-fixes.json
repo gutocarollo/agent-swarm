@@ -50,10 +50,10 @@
       "marker": "assert_payload_block"
     },
     {
-      "id": "CI-CONTRACT-001",
-      "desc": "CI runs the self-contained contract validator",
-      "file": ".github/workflows/ci.yml",
-      "marker": "python3 scripts/validate_contract.py"
+      "id": "LOCAL-CONTRACT-001",
+      "desc": "Contract validation is local/manual, not GitHub Actions",
+      "file": "README.md",
+      "marker": "Nao ha GitHub Actions neste pacote"
     }
   ]
 }

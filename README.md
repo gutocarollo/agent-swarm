@@ -17,7 +17,6 @@ O objetivo e simples:
 
 ```text
 agent-swarm/
-├─ .github/workflows/ci.yml
 ├─ .agents/skills/
 │  ├─ learnhouse-delivery-council/
 │  ├─ adversarial-review/
@@ -291,7 +290,9 @@ validam e registram evidencia.
 | Ledger | `scripts/agent_swarm_ledger.py` | Registra rodadas em `.agent-swarm/runs/<run-id>/loop.jsonl` quando houver escrita local. |
 | Prompt | `scripts/render_prompt.py` | Gera prompts `ARGS:` validos para reduzir erro humano. |
 | Regressao | `tests/test_agent_contract.py` | Testa fluxo, handoffs, payloads, witness, schemas, prompt e ledger. |
-| CI | `.github/workflows/ci.yml` | Roda `python3 scripts/validate_contract.py` em push, PR e manual dispatch. |
+
+Nao ha GitHub Actions neste pacote. A validacao e local/manual e deve ser
+rodada pelo agente antes de commit ou entrega.
 
 ### Witness
 
@@ -354,7 +355,6 @@ python3 scripts/render_prompt.py \
 | `schemas/*.schema.json` | Contratos estruturados opcionais para reviews e ledger. |
 | `scripts/*.py` | Validacao, witness, ledger e prompt generator. |
 | `verification/witness-fixes.json` | Marcadores load-bearing do contrato. |
-| `.github/workflows/ci.yml` | CI self-contained do contrato. |
 
 ## Validacao
 

@@ -19,6 +19,8 @@ Este repositorio publica o pacote Codex-native do LearnHouse Delivery Council.
   o ponto unico de validacao; `scripts/verify_witness.py` apenas verifica
   marcadores load-bearing; `scripts/agent_swarm_ledger.py` apenas registra
   evidencia de rodadas. Nao transforme esses scripts em segundo orquestrador.
+- Nao adicione GitHub Actions a este pacote. A validacao e local/manual e deve
+  ser executada por agente ou mantenedor com `python3 scripts/validate_contract.py`.
 - Nao copie `.claude/CLAUDE.md`, credenciais, dumps, logs, dados de producao ou
   instrucoes privadas de cliente para este repo.
 - Preserve o repo como pacote autocontido: skill orquestradora, skills de apoio,
