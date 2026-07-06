@@ -77,6 +77,10 @@ Este e o fluxo que importa. A ordem nao muda: `PLAN_REVIEW` vem depois de
 `PLAN`, e `EXECUTION` vem depois de `PLAN_REVIEW`. `START_AT` apenas escolhe
 onde entrar nessa sequencia.
 
+Regra de gate: execucao so pode sair do caminho de plano se o ultimo
+`PLAN_REVIEW` terminar em `SATISFEITO`. `REPLANEJAR` na rodada final e
+`PENDENTE` real, nao "pendente formal"; nesse caso a execucao nao comeca.
+
 ```mermaid
 flowchart TD
     A["Prompt + ARGS"] --> B["Resolver START_AT<br/>(AUTO vira PLANNING, PLAN_REVIEW ou EXECUTION)"]
@@ -209,6 +213,17 @@ Resumo final esperado:
 PLAN-ADVERSARIAL-LOOP: <rodadas>/2, status: <SATISFEITO|PENDENTE|BLOQUEADO>
 ADVERSARIAL-LOOP: <rodadas>/3, status: <SATISFEITO|PENDENTE|BLOQUEADO>
 ```
+
+Invalido:
+
+```md
+PLAN-ADVERSARIAL-LOOP: 2/2, status: PENDENTE
+ADVERSARIAL-LOOP: 1/3, status: SATISFEITO
+```
+
+Esse par significa que a execucao rodou depois de plano nao aprovado. Se o gap
+do plano foi corrigido apos a segunda rodada, falta uma nova rodada de
+`PLAN_REVIEW` antes da execucao.
 
 ## Arquivos Principais
 

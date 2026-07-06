@@ -8,6 +8,9 @@ Este repositorio publica o pacote Codex-native do LearnHouse Delivery Council.
   `.codex/agents/learnhouse-adversarial-reviewer.toml` e
   `.agents/skills/learnhouse-delivery-council/agents/openai.yaml` sincronizados
   quando alterar parametros, sentinels ou limites de loop.
+- Preserve o gate sequencial: `PLAN -> PLAN_REVIEW -> EXECUTION -> EXECUTION_REVIEW`.
+  Execucao so pode seguir de planejamento quando o ultimo `PLAN_REVIEW` retornar
+  `SATISFEITO`; `REPLANEJAR` na rodada final e `PENDENTE` real e bloqueia execucao.
 - Nao copie `.claude/CLAUDE.md`, credenciais, dumps, logs, dados de producao ou
   instrucoes privadas de cliente para este repo.
 - Preserve o repo como pacote autocontido: skill orquestradora, skills de apoio,

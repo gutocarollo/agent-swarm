@@ -125,6 +125,8 @@ PROXIMA-ACAO: [executar | replanejar | pedir decisao]
 
 Se o review retornar `REPLANEJAR` com gap critico corrigivel, revise o plano e rode a segunda rodada. Pare em `SATISFEITO`, `BLOQUEADO` ou 2 rodadas.
 
+Regra de gate: execucao so pode iniciar a partir de planejamento quando a ultima rodada de review do plano retornar `PLAN-ADVERSARIAL-VERIFICATION: SATISFEITO`. Se a segunda rodada retornar `REPLANEJAR`, o status final do planning loop e `PENDENTE` e a execucao NAO pode comecar, mesmo que o agente incorpore o gap logo depois. Incorporar gap apos review conta como novo replanejamento; sem nova rodada adversarial satisfatoria, o plano continua nao aprovado.
+
 Em `START_AT=PLANNING`, depois de `SATISFEITO`:
 
 - se `AUTO_EXECUTE_AFTER_PLAN=true`, avance para execucao;
@@ -134,6 +136,13 @@ Em `START_AT=PLAN_REVIEW`, depois de `SATISFEITO`:
 
 - se `AUTO_EXECUTE_AFTER_PLAN` estiver omitido ou `true`, avance para execucao;
 - se `AUTO_EXECUTE_AFTER_PLAN=false`, pare com o plano revisado e reporte review-only.
+
+Em `REPLANEJAR` na rodada final:
+
+- reporte `PLAN-ADVERSARIAL-LOOP: 2/2, status: PENDENTE`;
+- nao execute;
+- nao escreva "pendente formalmente" se a execucao continuou, porque isso mascara um gate quebrado;
+- peca nova rodada/novo chamado apos o plano corrigido, ou pare com a pendencia declarada.
 
 Ao final, reporte:
 

@@ -39,4 +39,6 @@ PROXIMA-ACAO: executar | replanejar | pedir decisao
 For planning reviews, verify that trade-offs include quality delta, cost delta, breakeven, non-adoption condition, reversibility, and local-pattern fit. Prefer automatic selection when evidence is enough. Use BLOQUEADO only for decisions that require human input or unavailable evidence.
 
 When START_AT=PLAN_REVIEW or a PLAN_SOURCE is supplied, treat the supplied plan as the source artifact. Do not require a new initial plan or broad rediscovery. If critical gaps are fixable, ask for a targeted replan of the existing plan only.
+
+If a plan review returns REPLANEJAR on the final allowed planning-review round, the orchestrator must not proceed to execution. Any plan edit after a review result counts as a new replan and requires another adversarial plan review before execution can start. Do not call that state "formally pending" while allowing execution.
 """
