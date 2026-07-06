@@ -1,19 +1,25 @@
 # Agent Swarm
 
-Pacote Codex-native para orquestrar entregas complexas com skills, custom agents,
-parametrizacao textual e loops adversariais de verificacao.
+Pacote Codex-native do **LearnHouse Delivery Council**: uma skill
+orquestradora, skills de apoio, custom agents e um contrato textual de
+parametros para escolher onde o agente entra no fluxo.
 
-Este repositorio publica o agente **LearnHouse Delivery Council**. Ele foi
-desenhado para uso dentro da extensao Codex no VS Code, Codex CLI ou Codex App,
-sem runner Python proprio, sem Agents SDK como requisito e sem depender de
-`OPENAI_API_KEY` para o fluxo principal.
+O objetivo e simples:
+
+1. Comecar direto na execucao, no planejamento ou no review de um plano pronto.
+2. Tomar decisoes automaticamente quando os trade-offs forem suficientes.
+3. Revisar adversarialmente o plano ate 2 vezes quando houver plano.
+4. Executar.
+5. Revisar adversarialmente a execucao ate 3 vezes, corrigindo gaps criticos.
 
 ## Estrutura
 
 ```text
 agent-swarm/
-├─ README.md
-├─ AGENTS.md
+├─ .agents/skills/
+│  ├─ learnhouse-delivery-council/
+│  ├─ adversarial-review/
+│  └─ clarification-plan/
 ├─ .codex/
 │  ├─ config.toml
 │  └─ agents/
@@ -21,38 +27,15 @@ agent-swarm/
 │     ├─ learnhouse-implementer.toml
 │     ├─ learnhouse-adversarial-reviewer.toml
 │     └─ learnhouse-test-auditor.toml
-├─ .agents/
-│  └─ skills/
-│     ├─ clarification-plan/
-│     ├─ adversarial-review/
-│     └─ learnhouse-delivery-council/
-└─ docs/
-   └─ PLANO-SWARM.md
-```
-
-## Arquitetura
-
-```mermaid
-flowchart TD
-    U["Usuario"] --> P["Prompt com ARGS"]
-    P --> C["$learnhouse-delivery-council"]
-    C --> CB["Context Brief"]
-    C --> R["Busca de reuso local"]
-    C --> D["Decisoes e trade-offs"]
-    D --> CP["$clarification-plan quando houver D[n] humano"]
-    C --> IM["Implementacao sequencial"]
-    IM --> V["Validacao real"]
-    V --> AR["Adversarial Verification Loop"]
-    AR --> OUT["Resposta final com evidencias e gaps"]
-    C -. opcional .-> S1["learnhouse-context-scout"]
-    C -. opcional .-> S2["learnhouse-implementer"]
-    C -. opcional .-> S3["learnhouse-adversarial-reviewer"]
-    C -. opcional .-> S4["learnhouse-test-auditor"]
+├─ AGENTS.md
+├─ README.md
+└─ docs/PLANO-SWARM.md
 ```
 
 ## Parametros
 
-Os argumentos sao texto no prompt, nao parametros formais de funcao.
+Os argumentos sao passados em texto no prompt. Eles nao sao parametros formais
+de funcao do runtime Codex.
 
 ```text
 Use $learnhouse-delivery-council.
@@ -69,53 +52,69 @@ TASK:
 [pedido]
 ```
 
-| Parametro | Valores | Default | Funcao |
-|---|---|---:|---|
-| `START_AT` | `EXECUTION`, `PLANNING`, `PLAN_REVIEW`, `AUTO` | `AUTO` | Define onde o fluxo comeca. |
-| `PLAN_SOURCE` | `path`, `inline`, `issue`, `diff` | omitido | Fonte do plano quando `START_AT=PLAN_REVIEW`. |
-| `AUTO_DECIDE` | `true`, `false` | `true` | Permite escolher automaticamente por trade-off. |
-| `PLAN_REVIEW_MAX` | inteiro, maximo `2` | `2` | Limite do Planning Adversarial Loop. |
-| `EXECUTION_REVIEW_MAX` | inteiro, maximo `3` | `3` | Limite do Adversarial Verification Loop. |
-| `AUTO_EXECUTE_AFTER_PLAN` | `true`, `false` | depende | Controla execucao apos plano/review de plano. |
+| Parametro | Default | Regra |
+|---|---:|---|
+| `START_AT` | `AUTO` | Escolhe `EXECUTION`, `PLANNING` ou `PLAN_REVIEW`. |
+| `PLAN_SOURCE` | omitido | Obrigatorio em `PLAN_REVIEW` se o plano nao estiver colado no prompt. |
+| `AUTO_DECIDE` | `true` | Escolhe por trade-off quando nao houver decisao humana real. |
+| `PLAN_REVIEW_MAX` | `2` | Limite do loop adversarial do plano. Nao aumentar. |
+| `EXECUTION_REVIEW_MAX` | `3` | Limite do loop adversarial da execucao. Nao aumentar. |
+| `AUTO_EXECUTE_AFTER_PLAN` | depende | `false` em `PLANNING`; `true` em `PLAN_REVIEW`. |
 
-Defaults condicionais:
+## Modos
 
-| Modo | `AUTO_EXECUTE_AFTER_PLAN` efetivo |
-|---|---:|
-| `START_AT=PLANNING` | `false` |
-| `START_AT=PLAN_REVIEW` | `true` |
-| `START_AT=EXECUTION` | irrelevante |
-| `START_AT=AUTO` | inferido |
+| `START_AT` | Quando usar | Comportamento |
+|---|---|---|
+| `EXECUTION` | Quero implementar agora. | Faz contexto minimo, executa, valida e roda review adversarial da execucao. |
+| `PLANNING` | Quero criar um plano antes. | Cria plano, roda review adversarial do plano ate 2 vezes e para, salvo `AUTO_EXECUTE_AFTER_PLAN=true`. |
+| `PLAN_REVIEW` | Ja existe um plano. | Revisa o plano existente ate 2 vezes, executa por default e revisa a execucao ate 3 vezes. |
+| `AUTO` | Quero deixar o agente inferir. | Verbo de execucao leva a `EXECUTION`; verbo de planejamento leva a `PLANNING`; plano existente leva a `PLAN_REVIEW`. |
 
-## Dispatcher
+## Fluxo Principal
+
+Este e o fluxo que importa. Ele mostra o caminho end-to-end e os dois loops com
+setas voltando para novas rodadas ate o limite.
 
 ```mermaid
 flowchart TD
-    A["Recebe prompt"] --> B{"ARGS existe?"}
-    B -->|sim| C["Ler START_AT"]
-    B -->|nao| D["Assumir START_AT=AUTO"]
-    D --> E{"Intencao do pedido"}
-    E -->|"implemente, corrija, termine, faca, aplique"| X["EXECUTION"]
-    E -->|"planeje, desenhe, arquitete, avalie abordagem"| Y["PLANNING"]
-    E -->|"plano ja existe, revise e execute"| Z["PLAN_REVIEW"]
-    E -->|"ambiguo"| Y
-    C --> F{"START_AT"}
-    F -->|EXECUTION| X
-    F -->|PLANNING| Y
-    F -->|PLAN_REVIEW| Z
-    F -->|AUTO| E
+    A["Prompt + ARGS"] --> B["Resolver START_AT"]
+
+    B --> C{"Modo"}
+    C -->|"EXECUTION"| X["Contexto minimo + reuso local"]
+    C -->|"PLANNING"| P0["Criar plano inicial"]
+    C -->|"PLAN_REVIEW"| P1["Ler plano existente via PLAN_SOURCE ou bloco PLAN"]
+    C -->|"AUTO"| AI["Inferir modo pelo pedido"]
+    AI --> C
+
+    P0 --> P2["Review adversarial do plano<br/>rodada i = 1"]
+    P1 --> P2
+    P2 --> P3{"PLAN-ADVERSARIAL<br/>status"}
+    P3 -->|"REPLANEJAR<br/>i < PLAN_REVIEW_MAX"| P4["Ajustar plano<br/>i = i + 1"]
+    P4 --> P2
+    P3 -->|"REPLANEJAR<br/>i = PLAN_REVIEW_MAX"| PEND["PENDENTE:<br/>limite do plano atingido"]
+    P3 -->|"BLOQUEADO"| PBLOCK["BLOQUEADO:<br/>precisa decisao/evidencia"]
+    P3 -->|"SATISFEITO"| P5{"Executar depois do plano?"}
+
+    P5 -->|"nao<br/>PLANNING default ou review-only"| PLANOUT["Finalizar com plano revisado"]
+    P5 -->|"sim<br/>PLAN_REVIEW default ou AUTO_EXECUTE_AFTER_PLAN=true"| X
+
+    X --> D{"D[n] humano bloqueante?"}
+    D -->|"sim"| DBLOCK["BLOQUEADO:<br/>pedir decisao"]
+    D -->|"nao"| E["Implementar passo sequencial"]
+    E --> F["Validar com comandos reais"]
+    F --> G["Review adversarial da execucao<br/>rodada j = 1"]
+
+    G --> H{"ADVERSARIAL<br/>status"}
+    H -->|"CORRIGIR<br/>j < EXECUTION_REVIEW_MAX"| I["Corrigir gap REAL<br/>BLOQUEANTE/ALTA<br/>j = j + 1"]
+    I --> F
+    H -->|"CORRIGIR<br/>j = EXECUTION_REVIEW_MAX"| EPEND["PENDENTE:<br/>limite da execucao atingido"]
+    H -->|"BLOQUEADO"| EBLOCK["BLOQUEADO:<br/>decisao, credencial, prod ou acao destrutiva"]
+    H -->|"SATISFEITO"| OK["Finalizar:<br/>entrega validada"]
 ```
 
-## Matriz De Modos
+## Exemplos De Uso
 
-| Modo | Comeca por | Edita codigo antes de review de plano? | Saida normal |
-|---|---|---:|---|
-| `EXECUTION` | Contexto minimo + reuso local | sim, se nao houver D[n] bloqueante | Validacao + execution review. |
-| `PLANNING` | Criar/estruturar plano | nao | Plano aprovado, salvo `AUTO_EXECUTE_AFTER_PLAN=true`. |
-| `PLAN_REVIEW` | Revisar plano existente | nao | Execucao por default, salvo review-only. |
-| `AUTO` | Inferir intencao | depende | Redireciona para um modo acima. |
-
-## Fluxo EXECUTION
+### Comecar direto na execucao
 
 ```text
 Use $learnhouse-delivery-council.
@@ -129,24 +128,7 @@ TASK:
 [descreva a implementacao]
 ```
 
-```mermaid
-flowchart TD
-    A["START_AT=EXECUTION"] --> B["Context Brief minimo"]
-    B --> C["Buscar reuso local"]
-    C --> D{"Ha D[n] humano bloqueante?"}
-    D -->|sim| E["Parar e pedir decisao com $clarification-plan"]
-    D -->|nao| F["Implementar passo pequeno"]
-    F --> G["Validar com comandos reais"]
-    G --> H["Adversarial Verification Loop"]
-    H --> I{"Status"}
-    I -->|SATISFEITO| J["Finalizar"]
-    I -->|CORRIGIR| K["Corrigir gap critico e repetir"]
-    I -->|BLOQUEADO| L["Declarar bloqueio"]
-```
-
-## Fluxo PLANNING
-
-Por default, este modo para no plano revisado/aprovado.
+### Comecar no planejamento
 
 ```text
 Use $learnhouse-delivery-council.
@@ -158,32 +140,10 @@ PLAN_REVIEW_MAX=2
 AUTO_EXECUTE_AFTER_PLAN=false
 
 TASK:
-[descreva o problema ou feature]
+[descreva o problema]
 ```
 
-```mermaid
-flowchart TD
-    A["START_AT=PLANNING"] --> B["Context Brief amplo"]
-    B --> C["Mapear opcoes"]
-    C --> D["Comparar trade-offs"]
-    D --> E{"AUTO_DECIDE=true?"}
-    E -->|sim| F["Escolher melhor opcao"]
-    E -->|nao| G["Emitir D[n]"]
-    G --> H["Aguardar decisao humana"]
-    F --> I["Planning Adversarial Loop"]
-    I --> J{"PLAN status"}
-    J -->|SATISFEITO| K{"AUTO_EXECUTE_AFTER_PLAN?"}
-    J -->|REPLANEJAR| L["Revisar plano e repetir ate 2"]
-    J -->|BLOQUEADO| M["Pedir decisao/evidencia"]
-    K -->|false ou omitido| N["Parar com plano aprovado"]
-    K -->|true| O["Executar plano"]
-    O --> P["Validacao + Adversarial Verification Loop"]
-```
-
-## Fluxo PLAN_REVIEW
-
-Use quando o plano ja existe. Este modo pula a criacao do plano inicial, revisa
-o plano existente, executa por default e revisa a execucao.
+### Comecar no review de um plano existente
 
 ```text
 Use $learnhouse-delivery-council.
@@ -197,24 +157,21 @@ EXECUTION_REVIEW_MAX=3
 AUTO_EXECUTE_AFTER_PLAN=true
 
 TASK:
-Revise o plano existente, execute o que estiver aprovado e rode review adversarial da execucao.
+Revise o plano existente, execute e revise adversarialmente a execucao.
 ```
 
-Plano inline:
+Para plano colado no prompt:
 
 ```text
 ARGS:
 START_AT=PLAN_REVIEW
 PLAN_SOURCE=inline
-AUTO_DECIDE=true
-PLAN_REVIEW_MAX=2
-EXECUTION_REVIEW_MAX=3
 
 PLAN:
 [cole o plano aqui]
 ```
 
-Review-only:
+Para apenas revisar o plano sem executar:
 
 ```text
 ARGS:
@@ -223,73 +180,9 @@ PLAN_SOURCE=docs/design-system/sources/MEU-PLANO.md
 AUTO_EXECUTE_AFTER_PLAN=false
 ```
 
-```mermaid
-flowchart TD
-    A["START_AT=PLAN_REVIEW"] --> B{"Plano fornecido?"}
-    B -->|PLAN_SOURCE path| C["Ler arquivo"]
-    B -->|PLAN_SOURCE inline| D["Ler bloco PLAN"]
-    B -->|issue ou diff| E["Reconstruir plano do artefato"]
-    B -->|nao| F["BLOQUEADO: pedir plano"]
-    C --> G["Plano existente = fonte inicial"]
-    D --> G
-    E --> G
-    G --> H["Planning Adversarial Loop ate 2"]
-    H --> I{"PLAN status"}
-    I -->|REPLANEJAR| J["Ajustar somente gaps criticos"]
-    J --> H
-    I -->|BLOQUEADO| K["Parar e pedir decisao/evidencia"]
-    I -->|SATISFEITO| L{"AUTO_EXECUTE_AFTER_PLAN"}
-    L -->|false| M["Review-only: parar"]
-    L -->|true ou omitido| N["Executar plano aprovado"]
-    N --> O["Validar"]
-    O --> P["Adversarial Verification Loop ate 3"]
-```
+## Sentinels Obrigatorios
 
-## Fluxo AUTO
-
-```mermaid
-flowchart LR
-    A["Prompt"] --> B{"Intencao predominante"}
-    B -->|"Executar agora"| C["EXECUTION"]
-    B -->|"Criar plano"| D["PLANNING"]
-    B -->|"Plano ja existe"| E["PLAN_REVIEW"]
-    B -->|"Incerto"| F["Explorar contexto"]
-    F --> G{"Dados resolvem?"}
-    G -->|sim| H["Escolher modo"]
-    G -->|nao| I["Pedir D[n] minima"]
-```
-
-## AUTO_DECIDE
-
-`AUTO_DECIDE=true` escolhe automaticamente quando existe vencedora clara por:
-
-- delta de qualidade;
-- delta de custo;
-- breakeven;
-- condicao de nao adocao;
-- reversibilidade;
-- aderencia a docs e padroes locais.
-
-```mermaid
-flowchart TD
-    A["Ha mais de uma opcao?"] -->|nao| B["Prosseguir"]
-    A -->|sim| C{"AUTO_DECIDE=true?"}
-    C -->|false| D["Emitir D[n]"]
-    C -->|true| E["Calcular trade-offs"]
-    E --> F{"Vencedora clara?"}
-    F -->|nao| D
-    F -->|sim| G{"Bloqueio humano?"}
-    G -->|"acao destrutiva"| D
-    G -->|"credencial ou pagamento"| D
-    G -->|"prod/deploy"| D
-    G -->|"decisao irreversivel"| D
-    G -->|"ambiguidade real"| D
-    G -->|"nenhum"| H["Escolher automaticamente"]
-```
-
-## Planning Adversarial Loop
-
-Aplicavel a `PLANNING` e `PLAN_REVIEW`.
+Review do plano:
 
 ```md
 PLAN-ADVERSARIAL-VERIFICATION: SATISFEITO | REPLANEJAR | BLOQUEADO
@@ -298,30 +191,7 @@ DECISAO-ESCOLHIDA: [opcao escolhida ou bloqueio]
 PROXIMA-ACAO: [executar | replanejar | pedir decisao]
 ```
 
-```mermaid
-stateDiagram-v2
-    [*] --> Rodada1
-    Rodada1 --> Satisfeito: SATISFEITO
-    Rodada1 --> Replanejar1: REPLANEJAR corrigivel
-    Rodada1 --> Bloqueado: BLOQUEADO
-    Replanejar1 --> Rodada2: revisar plano
-    Rodada2 --> Satisfeito: SATISFEITO
-    Rodada2 --> Pendente: REPLANEJAR restante ou limite
-    Rodada2 --> Bloqueado: BLOQUEADO
-    Satisfeito --> [*]
-    Pendente --> [*]
-    Bloqueado --> [*]
-```
-
-Saida:
-
-```md
-PLAN-ADVERSARIAL-LOOP: <rodadas>/2, status: <SATISFEITO|PENDENTE|BLOQUEADO>
-```
-
-## Adversarial Verification Loop
-
-Aplicavel ao final de execucao de risco medio/alto.
+Review da execucao:
 
 ```md
 ADVERSARIAL-VERIFICATION: SATISFEITO | CORRIGIR | BLOQUEADO
@@ -329,78 +199,12 @@ GAPS-CRITICOS: N
 PROXIMA-ACAO: [corrigir | parar | pedir decisao]
 ```
 
-```mermaid
-stateDiagram-v2
-    [*] --> Review1
-    Review1 --> Done: SATISFEITO
-    Review1 --> Fix1: CORRIGIR
-    Review1 --> Blocked: BLOQUEADO
-    Fix1 --> Review2: corrigir gap REAL ALTA/BLOQUEANTE
-    Review2 --> Done: SATISFEITO
-    Review2 --> Fix2: CORRIGIR
-    Review2 --> Blocked: BLOQUEADO
-    Fix2 --> Review3: corrigir gap REAL ALTA/BLOQUEANTE
-    Review3 --> Done: SATISFEITO
-    Review3 --> Pending: CORRIGIR restante ou limite 3
-    Review3 --> Blocked: BLOQUEADO
-    Done --> [*]
-    Pending --> [*]
-    Blocked --> [*]
-```
-
-Corrigir automaticamente somente quando o gap for `REAL`,
-`BLOQUEANTE`/`ALTA`, corrigivel no workspace atual e sem decisao humana,
-credencial, ambiente externo, prod/deploy ou acao destrutiva.
-
-Saida:
+Resumo final esperado:
 
 ```md
+PLAN-ADVERSARIAL-LOOP: <rodadas>/2, status: <SATISFEITO|PENDENTE|BLOQUEADO>
 ADVERSARIAL-LOOP: <rodadas>/3, status: <SATISFEITO|PENDENTE|BLOQUEADO>
 ```
-
-## Subagents
-
-Subagents sao opcionais e devem ser usados quando a tarefa for paralelizavel ou
-quando o usuario pedir delegacao explicitamente.
-
-```mermaid
-sequenceDiagram
-    participant U as Usuario
-    participant C as Council
-    participant CS as Context Scout
-    participant IM as Implementer
-    participant AR as Adversarial Reviewer
-    participant TA as Test Auditor
-
-    U->>C: Prompt + ARGS
-    C->>C: Resolver START_AT
-    opt Exploracao paralelizavel
-        C->>CS: Mapear docs, padroes e riscos
-        CS-->>C: Context Brief
-    end
-    C->>C: Planejar ou revisar plano
-    opt Implementacao delegavel
-        C->>IM: Executar plano aprovado
-        IM-->>C: Diff + validacao
-    end
-    C->>TA: Auditar evidencia
-    TA-->>C: Cobertura e lacunas
-    C->>AR: Review adversarial
-    AR-->>C: SATISFEITO/CORRIGIR/BLOQUEADO
-    C-->>U: Resultado final
-```
-
-## Instalacao Em Outro Repo
-
-Copie os diretorios para a raiz do repo alvo:
-
-```bash
-cp -R .agents .codex /path/to/repo/
-```
-
-Depois adicione ao `AGENTS.md` do repo alvo apenas o bloco operacional
-necessario. Nao copie credenciais, `.claude/`, dumps, logs de producao ou
-instrucoes privadas.
 
 ## Arquivos Principais
 
@@ -408,13 +212,12 @@ instrucoes privadas.
 |---|---|
 | `.agents/skills/learnhouse-delivery-council/SKILL.md` | Skill orquestradora e contrato dos modos. |
 | `.agents/skills/adversarial-review/SKILL.md` | Auditoria adversarial com evidencia. |
-| `.agents/skills/clarification-plan/SKILL.md` | Formato D[n] para decisoes humanas. |
-| `.codex/agents/learnhouse-context-scout.toml` | Explorer read-only para contexto. |
-| `.codex/agents/learnhouse-implementer.toml` | Executor workspace-write. |
+| `.agents/skills/clarification-plan/SKILL.md` | Decisoes humanas D[n]. |
 | `.codex/agents/learnhouse-adversarial-reviewer.toml` | Reviewer read-only com sentinels. |
-| `.codex/agents/learnhouse-test-auditor.toml` | Auditor read-only de evidencia. |
-| `.codex/config.toml` | Limites de project docs e fan-out de agents. |
-| `docs/PLANO-SWARM.md` | Plano-fonte historico da decisao Codex-native. |
+| `.codex/agents/learnhouse-context-scout.toml` | Scout read-only de contexto. |
+| `.codex/agents/learnhouse-implementer.toml` | Implementador workspace-write. |
+| `.codex/agents/learnhouse-test-auditor.toml` | Auditor read-only de validacao. |
+| `.codex/config.toml` | Limites de project docs e fan-out. |
 
 ## Validacao
 
@@ -436,23 +239,11 @@ PY
 git diff --check
 ```
 
-Verificacao semantica minima:
+## Manutencao
 
-```bash
-rg -n "START_AT=EXECUTION \\| PLANNING \\| PLAN_REVIEW \\| AUTO|PLAN_SOURCE|PLAN-ADVERSARIAL-VERIFICATION|ADVERSARIAL-VERIFICATION" .
-```
-
-## Checklist De Manutencao
-
-- Mudou `START_AT`: atualize README, skill, reviewer TOML e exemplos.
-- Mudou sentinel: atualize reviewer e diagramas.
-- Mudou limite de loop: atualize `PLAN_REVIEW_MAX`, `EXECUTION_REVIEW_MAX` e
-  state diagrams.
-- Adicionou skill de apoio: declare no README e na skill orquestradora.
-- Nunca publique segredos, `.claude/`, credenciais ou detalhes privados de
-  cliente neste repo publico.
-
-## Licenca
-
-Ainda nao ha licenca definida. Nao assuma permissao de uso externo ate uma
-licenca ser adicionada pelo dono do repositorio.
+- Se mudar parametro, atualize a tabela e o fluxo principal.
+- Se mudar limite de loop, atualize os ramos `i < PLAN_REVIEW_MAX` e
+  `j < EXECUTION_REVIEW_MAX`.
+- Se mudar sentinel, atualize a skill e o reviewer TOML.
+- Nao publique segredos, `.claude/`, logs, dumps ou detalhes privados de
+  cliente neste repositorio.
