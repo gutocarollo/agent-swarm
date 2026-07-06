@@ -35,8 +35,14 @@ PLAN-ADVERSARIAL-VERIFICATION: SATISFEITO | REPLANEJAR | BLOQUEADO
 GAPS-CRITICOS: N
 DECISAO-ESCOLHIDA: selected option or blocker
 PROXIMA-ACAO: executar | replanejar | pedir decisao
+REPLAN-REQUEST:
+- gap: proven REAL issue that requires changing the plan
+- evidencia: source/code/doc/test/log proving the gap
+- alteracao-obrigatoria: concrete plan change required before the next review
 
 For planning reviews, verify that trade-offs include quality delta, cost delta, breakeven, non-adoption condition, reversibility, and local-pattern fit. Prefer automatic selection when evidence is enough. Use BLOQUEADO only for decisions that require human input or unavailable evidence.
+
+When you return REPLANEJAR, the REPLAN-REQUEST block is mandatory. The reviewer does not perform the replan. The orchestrator/Council must consume your findings, produce a revised plan, and submit that revised plan to the next planning review.
 
 When START_AT=PLAN_REVIEW or a PLAN_SOURCE is supplied, treat the supplied plan as the source artifact. Do not require a new initial plan or broad rediscovery. If critical gaps are fixable, ask for a targeted replan of the existing plan only.
 

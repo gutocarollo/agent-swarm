@@ -121,9 +121,25 @@ PLAN-ADVERSARIAL-VERIFICATION: SATISFEITO | REPLANEJAR | BLOQUEADO
 GAPS-CRITICOS: N
 DECISAO-ESCOLHIDA: [opcao escolhida ou bloqueio]
 PROXIMA-ACAO: [executar | replanejar | pedir decisao]
+REPLAN-REQUEST:
+- gap: [achado REAL que exige mudanca no plano]
+- evidencia: [fonte/codigo/doc/teste que prova o gap]
+- alteracao-obrigatoria: [mudanca objetiva que o plano revisado deve incorporar]
 ```
 
-Se o review retornar `REPLANEJAR` com gap critico corrigivel, revise o plano e rode a segunda rodada. Pare em `SATISFEITO`, `BLOQUEADO` ou 2 rodadas.
+Se o review retornar `REPLANEJAR` com gap critico corrigivel, o Council deve replanejar usando o bloco `REPLAN-REQUEST` como input obrigatorio. O reviewer nao replaneja; ele acusa e especifica a mudanca minima. O Council incorpora essa mudanca no plano revisado, registra o que mudou e so entao roda a proxima rodada de plan review.
+
+Handoff obrigatorio em cada `REPLANEJAR`:
+
+```md
+REPLAN-CONSUMED:
+- source-review-round: <n>
+- gaps-incorporados: [...]
+- plano-alterado-em: [...]
+- decisao-atualizada: [...]
+```
+
+Sem `REPLAN-REQUEST` do reviewer e sem `REPLAN-CONSUMED` do Council, a proxima rodada do loop e invalida. Pare em `SATISFEITO`, `BLOQUEADO` ou 2 rodadas.
 
 Regra de gate: execucao so pode iniciar a partir de planejamento quando a ultima rodada de review do plano retornar `PLAN-ADVERSARIAL-VERIFICATION: SATISFEITO`. Se a segunda rodada retornar `REPLANEJAR`, o status final do planning loop e `PENDENTE` e a execucao NAO pode comecar, mesmo que o agente incorpore o gap logo depois. Incorporar gap apos review conta como novo replanejamento; sem nova rodada adversarial satisfatoria, o plano continua nao aprovado.
 
@@ -142,7 +158,7 @@ Em `REPLANEJAR` na rodada final:
 - reporte `PLAN-ADVERSARIAL-LOOP: 2/2, status: PENDENTE`;
 - nao execute;
 - nao escreva "pendente formalmente" se a execucao continuou, porque isso mascara um gate quebrado;
-- peca nova rodada/novo chamado apos o plano corrigido, ou pare com a pendencia declarada.
+- entregue o `REPLAN-REQUEST` final como proxima acao concreta para o proximo chamado, ou pare com a pendencia declarada.
 
 Ao final, reporte:
 

@@ -81,6 +81,10 @@ Regra de gate: execucao so pode sair do caminho de plano se o ultimo
 `PLAN_REVIEW` terminar em `SATISFEITO`. `REPLANEJAR` na rodada final e
 `PENDENTE` real, nao "pendente formal"; nesse caso a execucao nao comeca.
 
+Em `REPLANEJAR`, a informacao precisa trafegar assim: o reviewer devolve
+`REPLAN-REQUEST`; o Council consome esse bloco, altera o plano e registra
+`REPLAN-CONSUMED`; so depois roda a proxima rodada de `PLAN_REVIEW`.
+
 ```mermaid
 flowchart TD
     A["Prompt + ARGS"] --> B["Resolver START_AT<br/>(AUTO vira PLANNING, PLAN_REVIEW ou EXECUTION)"]
@@ -197,6 +201,20 @@ PLAN-ADVERSARIAL-VERIFICATION: SATISFEITO | REPLANEJAR | BLOQUEADO
 GAPS-CRITICOS: N
 DECISAO-ESCOLHIDA: [opcao escolhida ou bloqueio]
 PROXIMA-ACAO: [executar | replanejar | pedir decisao]
+REPLAN-REQUEST:
+- gap: [achado REAL que exige mudanca no plano]
+- evidencia: [fonte/codigo/doc/teste que prova o gap]
+- alteracao-obrigatoria: [mudanca objetiva que o plano revisado deve incorporar]
+```
+
+Consumo obrigatorio do replanejamento:
+
+```md
+REPLAN-CONSUMED:
+- source-review-round: <n>
+- gaps-incorporados: [...]
+- plano-alterado-em: [...]
+- decisao-atualizada: [...]
 ```
 
 Review da execucao:
