@@ -265,3 +265,8 @@ FIX-REQUEST:
 ```
 
 Se retornar `CORRIGIR`, `FIX-REQUEST` e obrigatorio. O reviewer nao corrige; o Council consome esse bloco e deve registrar `FIX-CONSUMED` antes da proxima rodada.
+
+Quando o pacote `agent-swarm` estiver presente e o Council pedir forma parseavel,
+espelhe o resultado em JSON compativel com `schemas/plan-review-result.schema.json`
+ou `schemas/execution-review-result.schema.json`. O JSON nao substitui os
+sentinels Markdown; ele serve apenas para validacao e ledger.

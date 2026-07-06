@@ -77,8 +77,9 @@ Nao delegue ambiguidade crua ao usuario. Explore codigo, docs e dados reais prim
    - rode testes, typecheck, lint, queries, scripts ou evidencia visual conforme o risco;
    - claim visual exige evidencia renderizada quando pixels importam;
    - claim de dado exige query ou prova equivalente.
-10. Execute o Adversarial Verification Loop para execucao.
-11. Relate sem inflar conclusao:
+10. Quando o pacote `agent-swarm` estiver disponivel no workspace, registre rodadas criticas com `scripts/agent_swarm_ledger.py`; isso e evidencia auxiliar, nao substitui o review.
+11. Execute o Adversarial Verification Loop para execucao.
+12. Relate sem inflar conclusao:
    - diga exatamente o que mudou;
    - liste comandos rodados e resultados;
    - declare gaps ou riscos restantes.
@@ -140,6 +141,13 @@ REPLAN-CONSUMED:
 ```
 
 Sem `REPLAN-REQUEST` do reviewer e sem `REPLAN-CONSUMED` do Council, a proxima rodada do loop e invalida. Pare em `SATISFEITO`, `BLOQUEADO` ou 2 rodadas.
+
+Se `scripts/agent_swarm_ledger.py` existir no workspace, registre:
+
+```bash
+python3 scripts/agent_swarm_ledger.py append --run-id <id> --loop planning --round <n> --event replan-request --status REPLANEJAR --payload-json '{"gap":"...","evidencia":"...","alteracao_obrigatoria":"..."}'
+python3 scripts/agent_swarm_ledger.py append --run-id <id> --loop planning --round <n> --event replan-consumed --status REPLANEJAR --payload-json '{"source_review_round":1,"gaps_incorporados":["..."]}'
+```
 
 Regra de gate: execucao so pode iniciar a partir de planejamento quando a ultima rodada de review do plano retornar `PLAN-ADVERSARIAL-VERIFICATION: SATISFEITO`. Se a segunda rodada retornar `REPLANEJAR`, o status final do planning loop e `PENDENTE` e a execucao NAO pode comecar, mesmo que o agente incorpore o gap logo depois. Incorporar gap apos review conta como novo replanejamento; sem nova rodada adversarial satisfatoria, o plano continua nao aprovado.
 
@@ -212,6 +220,13 @@ FIX-CONSUMED:
 
 Sem `FIX-REQUEST` do reviewer e sem `FIX-CONSUMED` do Council, a proxima rodada do loop e invalida.
 
+Se `scripts/agent_swarm_ledger.py` existir no workspace, registre:
+
+```bash
+python3 scripts/agent_swarm_ledger.py append --run-id <id> --loop execution --round <n> --event fix-request --status CORRIGIR --payload-json '{"gap":"...","evidencia":"...","alteracao_obrigatoria":"..."}'
+python3 scripts/agent_swarm_ledger.py append --run-id <id> --loop execution --round <n> --event fix-consumed --status CORRIGIR --payload-json '{"source_review_round":1,"gaps_corrigidos":["..."],"validacao_rodada":["..."]}'
+```
+
 Nao corrija automaticamente:
 
 - decisao D[n] sem escolha do usuario;
@@ -278,3 +293,13 @@ Subagents sao opcionais e devem ser pedidos explicitamente pelo usuario ou usado
 - `learnhouse-test-auditor` para validar se a evidencia sustenta o claim.
 
 Sempre espere todos terminarem antes de consolidar achados. Nao use subagents para fugir de uma decisao que exige leitura direta de instrucoes da skill pelo agente principal.
+
+## Contrato Executavel Do Pacote
+
+Quando estiver mantendo este pacote, use `python3 scripts/validate_contract.py`.
+Esse script e o ponto unico de validacao: schemas JSON, metadados das skills,
+witness, regressao e whitespace. Nao crie validadores paralelos.
+
+Os schemas em `schemas/` sao espelhos estruturados opcionais dos sentinels em
+Markdown. O output humano continua sendo Markdown; o JSON e usado quando a
+execucao precisa de evidencia parseavel.

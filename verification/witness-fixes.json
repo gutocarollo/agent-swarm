@@ -1,0 +1,59 @@
+{
+  "schema": "agent-swarm-witness/v1",
+  "fixes": [
+    {
+      "id": "ORDER-001",
+      "desc": "Main flow order remains sequential",
+      "file": "README.md",
+      "marker": "PLAN -> PLAN_REVIEW -> EXECUTION -> EXECUTION_REVIEW"
+    },
+    {
+      "id": "PLAN-REQUEST-001",
+      "desc": "Plan review transports actionable replan request",
+      "file": "README.md",
+      "marker": "REPLAN-REQUEST:"
+    },
+    {
+      "id": "PLAN-CONSUMED-001",
+      "desc": "Council records consumed replan request before next review",
+      "file": "README.md",
+      "marker": "REPLAN-CONSUMED:"
+    },
+    {
+      "id": "EXEC-REQUEST-001",
+      "desc": "Execution review transports actionable fix request",
+      "file": "README.md",
+      "marker": "FIX-REQUEST:"
+    },
+    {
+      "id": "EXEC-CONSUMED-001",
+      "desc": "Council records consumed fix request before next review",
+      "file": "README.md",
+      "marker": "FIX-CONSUMED:"
+    },
+    {
+      "id": "PLAN-FINAL-GATE-001",
+      "desc": "Final replan blocks execution",
+      "file": ".agents/skills/learnhouse-delivery-council/SKILL.md",
+      "marker": "execucao NAO pode comecar"
+    },
+    {
+      "id": "EXEC-FINAL-GATE-001",
+      "desc": "Final fix request blocks satisfied execution claim",
+      "file": ".agents/skills/learnhouse-delivery-council/SKILL.md",
+      "marker": "nao declare `ADVERSARIAL-VERIFICATION: SATISFEITO`"
+    },
+    {
+      "id": "TEST-PAYLOAD-SCOPE-001",
+      "desc": "Regression tests validate payload fields inside the correct sentinel block",
+      "file": "tests/test_agent_contract.py",
+      "marker": "assert_payload_block"
+    },
+    {
+      "id": "CI-CONTRACT-001",
+      "desc": "CI runs the self-contained contract validator",
+      "file": ".github/workflows/ci.yml",
+      "marker": "python3 scripts/validate_contract.py"
+    }
+  ]
+}

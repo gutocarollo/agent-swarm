@@ -17,6 +17,7 @@ O objetivo e simples:
 
 ```text
 agent-swarm/
+├─ .github/workflows/ci.yml
 ├─ .agents/skills/
 │  ├─ learnhouse-delivery-council/
 │  ├─ adversarial-review/
@@ -30,7 +31,11 @@ agent-swarm/
 │     └─ learnhouse-test-auditor.toml
 ├─ AGENTS.md
 ├─ README.md
-└─ docs/PLANO-SWARM.md
+├─ docs/PLANO-SWARM.md
+├─ schemas/
+├─ scripts/
+├─ tests/
+└─ verification/
 ```
 
 ## Parametros
@@ -271,6 +276,69 @@ ADVERSARIAL-VERIFICATION: SATISFEITO
 Esse par significa que uma correcao foi exigida no limite do loop, mas a
 execucao foi declarada satisfeita sem nova validacao adversarial.
 
+## Contrato Executavel
+
+O pacote tem uma camada pequena de verificacao inspirada no witness do Ruflo,
+mas sem criar runtime paralelo. A skill continua orquestrando; os scripts so
+validam e registram evidencia.
+
+| Camada | Arquivo | Papel |
+|---|---|---|
+| Validacao unica | `scripts/validate_contract.py` | Roda schemas, skill metadata, witness, testes e `git diff --check`. |
+| Skill metadata | `scripts/validate_skills.py` | Valida frontmatter das skills, custom agents TOML e `openai.yaml` sem dependencia externa. |
+| Witness | `verification/witness-fixes.json` + `scripts/verify_witness.py` | Garante que marcadores load-bearing do contrato nao sumiram. |
+| Schemas | `schemas/*.schema.json` | Forma estruturada opcional para outputs de review e eventos de ledger. |
+| Ledger | `scripts/agent_swarm_ledger.py` | Registra rodadas em `.agent-swarm/runs/<run-id>/loop.jsonl` quando houver escrita local. |
+| Prompt | `scripts/render_prompt.py` | Gera prompts `ARGS:` validos para reduzir erro humano. |
+| Regressao | `tests/test_agent_contract.py` | Testa fluxo, handoffs, payloads, witness, schemas, prompt e ledger. |
+| CI | `.github/workflows/ci.yml` | Roda `python3 scripts/validate_contract.py` em push, PR e manual dispatch. |
+
+### Witness
+
+`verification/witness-fixes.json` lista marcadores que nao podem desaparecer,
+como `REPLAN-REQUEST`, `REPLAN-CONSUMED`, `FIX-REQUEST`, `FIX-CONSUMED`, gates
+finais e o teste `assert_payload_block`. Verifique com:
+
+```bash
+python3 scripts/verify_witness.py
+```
+
+### Schemas
+
+Os sentinels em Markdown continuam sendo a interface humana. Quando quiser uma
+forma de maquina, espelhe o resultado usando:
+
+- `schemas/plan-review-result.schema.json`
+- `schemas/execution-review-result.schema.json`
+- `schemas/ledger-event.schema.json`
+
+### Ledger
+
+O ledger responde a pergunta: "a mensagem trafegou entre reviewer e Council?"
+Use quando o workspace onde o agente roda tiver escrita local:
+
+```bash
+python3 scripts/agent_swarm_ledger.py append \
+  --run-id entrega-auth-001 \
+  --loop execution \
+  --round 1 \
+  --event fix-request \
+  --status CORRIGIR \
+  --payload-json '{"gap":"...","evidencia":"...","alteracao_obrigatoria":"..."}'
+
+python3 scripts/agent_swarm_ledger.py summary --run-id entrega-auth-001
+```
+
+Os registros ficam em `.agent-swarm/runs/`, que e ignorado pelo git.
+
+### Prompt Generator
+
+```bash
+python3 scripts/render_prompt.py \
+  --start-at EXECUTION \
+  --task "Corrigir fluxo de refresh token"
+```
+
 ## Arquivos Principais
 
 | Arquivo | Funcao |
@@ -283,26 +351,15 @@ execucao foi declarada satisfeita sem nova validacao adversarial.
 | `.codex/agents/learnhouse-implementer.toml` | Implementador workspace-write. |
 | `.codex/agents/learnhouse-test-auditor.toml` | Auditor read-only de validacao. |
 | `.codex/config.toml` | Limites de project docs e fan-out. |
+| `schemas/*.schema.json` | Contratos estruturados opcionais para reviews e ledger. |
+| `scripts/*.py` | Validacao, witness, ledger e prompt generator. |
+| `verification/witness-fixes.json` | Marcadores load-bearing do contrato. |
+| `.github/workflows/ci.yml` | CI self-contained do contrato. |
 
 ## Validacao
 
 ```bash
-python3 /home/augusto/.codex/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/learnhouse-delivery-council
-python3 /home/augusto/.codex/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/adversarial-review
-python3 /home/augusto/.codex/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/clarification-plan
-python3 -m unittest discover -s tests -v
-python3 - <<'PY'
-import pathlib
-import tomllib
-import yaml
-
-for path in pathlib.Path(".codex/agents").glob("*.toml"):
-    tomllib.loads(path.read_text())
-tomllib.loads(pathlib.Path(".codex/config.toml").read_text())
-yaml.safe_load(pathlib.Path(".agents/skills/learnhouse-delivery-council/agents/openai.yaml").read_text())
-print("parse-ok")
-PY
-git diff --check
+python3 scripts/validate_contract.py
 ```
 
 ## Manutencao
@@ -310,6 +367,9 @@ git diff --check
 - Se mudar parametro, atualize a tabela e o fluxo principal.
 - Se mudar limite de loop, atualize os ramos `i < PLAN_REVIEW_MAX` e
   `j < EXECUTION_REVIEW_MAX`.
-- Se mudar sentinel, atualize a skill e o reviewer TOML.
+- Se mudar sentinel, atualize a skill, o reviewer TOML, os schemas, witness e
+  testes de regressao.
+- Se mudar fluxo/handoff, adicione marcador em `verification/witness-fixes.json`
+  e teste negativo em `tests/test_agent_contract.py`.
 - Nao publique segredos, `.claude/`, logs, dumps ou detalhes privados de
   cliente neste repositorio.

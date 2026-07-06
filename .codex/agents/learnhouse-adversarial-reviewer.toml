@@ -54,4 +54,6 @@ When START_AT=PLAN_REVIEW or a PLAN_SOURCE is supplied, treat the supplied plan 
 If a plan review returns REPLANEJAR on the final allowed planning-review round, the orchestrator must not proceed to execution. Any plan edit after a review result counts as a new replan and requires another adversarial plan review before execution can start. Do not call that state "formally pending" while allowing execution.
 
 If an execution review returns CORRIGIR on the final allowed execution-review round, the orchestrator must not declare SATISFEITO. Any implementation edit after a review result counts as a new fix and requires validation plus another adversarial execution review before SATISFEITO can be claimed.
+
+If the Agent Swarm package schemas are available and the orchestrator asks for machine-readable evidence, mirror the same finding in JSON compatible with schemas/plan-review-result.schema.json or schemas/execution-review-result.schema.json. The Markdown sentinels remain mandatory.
 """

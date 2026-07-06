@@ -15,6 +15,10 @@ Este repositorio publica o pacote Codex-native do LearnHouse Delivery Council.
   Council consome e registra `REPLAN-CONSUMED`; sem esses blocos, o loop e invalido.
 - Preserve o handoff de correcao: reviewer retorna `FIX-REQUEST`; Council
   corrige, revalida e registra `FIX-CONSUMED`; sem esses blocos, o loop e invalido.
+- Preserve a abstracao de contrato executavel: `scripts/validate_contract.py` e
+  o ponto unico de validacao; `scripts/verify_witness.py` apenas verifica
+  marcadores load-bearing; `scripts/agent_swarm_ledger.py` apenas registra
+  evidencia de rodadas. Nao transforme esses scripts em segundo orquestrador.
 - Nao copie `.claude/CLAUDE.md`, credenciais, dumps, logs, dados de producao ou
   instrucoes privadas de cliente para este repo.
 - Preserve o repo como pacote autocontido: skill orquestradora, skills de apoio,
@@ -26,22 +30,7 @@ Este repositorio publica o pacote Codex-native do LearnHouse Delivery Council.
 Rode:
 
 ```bash
-python3 /home/augusto/.codex/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/learnhouse-delivery-council
-python3 /home/augusto/.codex/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/adversarial-review
-python3 /home/augusto/.codex/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/clarification-plan
-python3 -m unittest discover -s tests -v
-python3 - <<'PY'
-import pathlib
-import tomllib
-import yaml
-
-for path in pathlib.Path(".codex/agents").glob("*.toml"):
-    tomllib.loads(path.read_text())
-tomllib.loads(pathlib.Path(".codex/config.toml").read_text())
-yaml.safe_load(pathlib.Path(".agents/skills/learnhouse-delivery-council/agents/openai.yaml").read_text())
-print("parse-ok")
-PY
-git diff --check
+python3 scripts/validate_contract.py
 ```
 
 Se a mudanca alterar comportamento do agente, rode tambem uma revisao

@@ -1,10 +1,11 @@
 import pathlib
+import json
 import re
+import shutil
 import subprocess
+import tempfile
 import tomllib
 import unittest
-
-import yaml
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -37,6 +38,9 @@ REVIEWER = ".codex/agents/learnhouse-adversarial-reviewer.toml"
 ADVERSARIAL = ".agents/skills/adversarial-review/SKILL.md"
 AGENTS = "AGENTS.md"
 PLAN_DOC = "docs/PLANO-SWARM.md"
+SCHEMAS = "schemas"
+WITNESS = "verification/witness-fixes.json"
+CI = ".github/workflows/ci.yml"
 
 
 class AgentContractRegressionTest(unittest.TestCase):
@@ -175,9 +179,33 @@ REPLAN-REQUEST:
         for path in (ROOT / ".codex/agents").glob("*.toml"):
             tomllib.loads(path.read_text(encoding="utf-8"))
 
-        metadata = yaml.safe_load(read(".agents/skills/learnhouse-delivery-council/agents/openai.yaml"))
-        self.assertIn("interface", metadata)
-        self.assertIn("default_prompt", metadata["interface"])
+        metadata = read(".agents/skills/learnhouse-delivery-council/agents/openai.yaml")
+        self.assertIn("interface:", metadata)
+        self.assertIn("display_name:", metadata)
+        self.assertIn("short_description:", metadata)
+        self.assertIn("default_prompt:", metadata)
+
+    def test_json_schemas_parse_and_enforce_conditional_payloads(self):
+        plan_schema = json.loads(read("schemas/plan-review-result.schema.json"))
+        execution_schema = json.loads(read("schemas/execution-review-result.schema.json"))
+        ledger_schema = json.loads(read("schemas/ledger-event.schema.json"))
+
+        self.assertEqual(plan_schema["properties"]["plan_adversarial_verification"]["enum"], ["SATISFEITO", "REPLANEJAR", "BLOQUEADO"])
+        self.assertEqual(execution_schema["properties"]["adversarial_verification"]["enum"], ["SATISFEITO", "CORRIGIR", "BLOQUEADO"])
+        self.assertIn("then", json.dumps(plan_schema))
+        self.assertIn("replan_request", json.dumps(plan_schema))
+        self.assertIn("then", json.dumps(execution_schema))
+        self.assertIn("fix_request", json.dumps(execution_schema))
+        self.assertEqual(ledger_schema["properties"]["event"]["enum"], ["review", "replan-request", "replan-consumed", "fix-request", "fix-consumed", "validation", "final"])
+
+    def test_structured_schema_mirror_does_not_replace_markdown_sentinels(self):
+        adversarial = read(ADVERSARIAL)
+        reviewer = read(REVIEWER)
+        for text in (adversarial, reviewer):
+            self.assertIn("schemas/plan-review-result.schema.json", text)
+            self.assertIn("schemas/execution-review-result.schema.json", text)
+        self.assertIn("nao substitui os\nsentinels Markdown", adversarial)
+        self.assertIn("Markdown sentinels remain mandatory", reviewer)
 
     def test_historical_plan_doc_is_marked_non_canonical(self):
         text = read(PLAN_DOC)
@@ -190,17 +218,10 @@ REPLAN-REQUEST:
         self.assertNotIn("execute quando o review ficar SATISFEITO", text)
         self.assertNotIn("corrija em sequência", text)
 
-    def test_skill_validator_accepts_all_skills(self):
-        validator = pathlib.Path("/home/augusto/.codex/skills/.system/skill-creator/scripts/quick_validate.py")
-        self.assertTrue(validator.exists(), validator)
-
-        for skill in (
-            ".agents/skills/learnhouse-delivery-council",
-            ".agents/skills/adversarial-review",
-            ".agents/skills/clarification-plan",
-        ):
+    def test_self_contained_validators_pass(self):
+        for script in ("scripts/validate_skills.py", "scripts/verify_witness.py"):
             result = subprocess.run(
-                ["python3", str(validator), skill],
+                ["python3", script],
                 cwd=ROOT,
                 text=True,
                 stdout=subprocess.PIPE,
@@ -208,6 +229,131 @@ REPLAN-REQUEST:
                 check=False,
             )
             self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_witness_markers_target_real_contract_files(self):
+        witness = json.loads(read(WITNESS))
+        self.assertEqual(witness["schema"], "agent-swarm-witness/v1")
+        ids = [item["id"] for item in witness["fixes"]]
+        self.assertEqual(len(ids), len(set(ids)))
+        for fix in witness["fixes"]:
+            text = read(fix["file"])
+            self.assertIn(fix["marker"], text, fix["id"])
+
+    def test_witness_fails_when_marker_is_missing(self):
+        bad_witness = {
+            "schema": "agent-swarm-witness/v1",
+            "fixes": [
+                {
+                    "id": "BAD",
+                    "desc": "missing marker must fail",
+                    "file": "README.md",
+                    "marker": "THIS_MARKER_SHOULD_NOT_EXIST_IN_AGENT_SWARM",
+                }
+            ],
+        }
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json") as handle:
+            json.dump(bad_witness, handle)
+            handle.flush()
+            result = subprocess.run(
+                ["python3", "scripts/verify_witness.py", "--witness", handle.name],
+                cwd=ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                check=False,
+            )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("marker missing", result.stdout)
+
+    def test_ci_runs_single_contract_validator(self):
+        workflow = read(CI)
+        self.assertIn("push:", workflow)
+        self.assertIn("pull_request:", workflow)
+        self.assertIn("workflow_dispatch:", workflow)
+        self.assertIn("actions/setup-python@v5", workflow)
+        self.assertIn("python3 scripts/validate_contract.py", workflow)
+
+    def test_prompt_generator_validates_args(self):
+        result = subprocess.run(
+            ["python3", "scripts/render_prompt.py", "--start-at", "PLAN_REVIEW", "--task", "Executar plano"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--plan-source is required", result.stdout)
+
+        result = subprocess.run(
+            [
+                "python3",
+                "scripts/render_prompt.py",
+                "--start-at",
+                "EXECUTION",
+                "--task",
+                "Corrigir auth",
+                "--execution-review-max",
+                "3",
+            ],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("START_AT=EXECUTION", result.stdout)
+        self.assertIn("EXECUTION_REVIEW_MAX=3", result.stdout)
+
+    def test_ledger_records_loop_events_as_jsonl(self):
+        run_id = "unittest-ledger"
+        run_dir = ROOT / ".agent-swarm" / "runs" / run_id
+        shutil.rmtree(run_dir, ignore_errors=True)
+        try:
+            result = subprocess.run(
+                [
+                    "python3",
+                    "scripts/agent_swarm_ledger.py",
+                    "append",
+                    "--run-id",
+                    run_id,
+                    "--loop",
+                    "execution",
+                    "--round",
+                    "1",
+                    "--event",
+                    "fix-request",
+                    "--status",
+                    "CORRIGIR",
+                    "--payload-json",
+                    '{"gap":"g","evidencia":"e","alteracao_obrigatoria":"a"}',
+                ],
+                cwd=ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout)
+            ledger = run_dir / "loop.jsonl"
+            entry = json.loads(ledger.read_text(encoding="utf-8").splitlines()[0])
+            self.assertEqual(entry["loop"], "execution")
+            self.assertEqual(entry["event"], "fix-request")
+            self.assertEqual(entry["payload"]["gap"], "g")
+
+            summary = subprocess.run(
+                ["python3", "scripts/agent_swarm_ledger.py", "summary", "--run-id", run_id],
+                cwd=ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                check=False,
+            )
+            self.assertEqual(summary.returncode, 0, summary.stdout)
+            self.assertIn('"execution:fix-request": 1', summary.stdout)
+        finally:
+            shutil.rmtree(run_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":
