@@ -6,11 +6,12 @@ parametros para escolher onde o agente entra no fluxo.
 
 O objetivo e simples:
 
-1. Comecar direto na execucao, no planejamento ou no review de um plano pronto.
-2. Tomar decisoes automaticamente quando os trade-offs forem suficientes.
-3. Revisar adversarialmente o plano ate 2 vezes quando houver plano.
-4. Executar.
-5. Revisar adversarialmente a execucao ate 3 vezes, corrigindo gaps criticos.
+1. Ter uma ordem fixa: `PLAN -> PLAN_REVIEW -> EXECUTION -> EXECUTION_REVIEW`.
+2. Permitir que `START_AT` escolha a primeira etapa executada nessa ordem.
+3. Comecar direto na execucao, no planejamento ou no review de um plano pronto.
+4. Tomar decisoes automaticamente quando os trade-offs forem suficientes.
+5. Revisar adversarialmente o plano ate 2 vezes quando houver plano.
+6. Revisar adversarialmente a execucao ate 3 vezes, corrigindo gaps criticos.
 
 ## Estrutura
 
@@ -54,7 +55,7 @@ TASK:
 
 | Parametro | Default | Regra |
 |---|---:|---|
-| `START_AT` | `AUTO` | Escolhe `EXECUTION`, `PLANNING` ou `PLAN_REVIEW`. |
+| `START_AT` | `AUTO` | Escolhe a primeira etapa executada na ordem fixa. |
 | `PLAN_SOURCE` | omitido | Obrigatorio em `PLAN_REVIEW` se o plano nao estiver colado no prompt. |
 | `AUTO_DECIDE` | `true` | Escolhe por trade-off quando nao houver decisao humana real. |
 | `PLAN_REVIEW_MAX` | `2` | Limite do loop adversarial do plano. Nao aumentar. |
@@ -63,40 +64,43 @@ TASK:
 
 ## Modos
 
-| `START_AT` | Quando usar | Comportamento |
+| `START_AT` | Primeira etapa executada | Etapas anteriores |
 |---|---|---|
-| `EXECUTION` | Quero implementar agora. | Faz contexto minimo, executa, valida e roda review adversarial da execucao. |
-| `PLANNING` | Quero criar um plano antes. | Cria plano, roda review adversarial do plano ate 2 vezes e para, salvo `AUTO_EXECUTE_AFTER_PLAN=true`. |
-| `PLAN_REVIEW` | Ja existe um plano. | Revisa o plano existente ate 2 vezes, executa por default e revisa a execucao ate 3 vezes. |
-| `AUTO` | Quero deixar o agente inferir. | Verbo de execucao leva a `EXECUTION`; verbo de planejamento leva a `PLANNING`; plano existente leva a `PLAN_REVIEW`. |
+| `PLANNING` | `PLAN` | Nenhuma. O agente cria/estrutura o plano. |
+| `PLAN_REVIEW` | `PLAN_REVIEW` | `PLAN` ja existe via `PLAN_SOURCE` ou bloco `PLAN`. |
+| `EXECUTION` | `EXECUTION` | `PLAN` e `PLAN_REVIEW` sao assumidos como resolvidos ou desnecessarios para esse chamado. |
+| `AUTO` | Inferida | O agente normaliza para `PLANNING`, `PLAN_REVIEW` ou `EXECUTION`. |
 
 ## Fluxo Principal
 
-Este e o fluxo que importa. Ele mostra o caminho end-to-end e os dois loops com
-setas voltando para novas rodadas ate o limite.
+Este e o fluxo que importa. A ordem nao muda: `PLAN_REVIEW` vem depois de
+`PLAN`, e `EXECUTION` vem depois de `PLAN_REVIEW`. `START_AT` apenas escolhe
+onde entrar nessa sequencia.
 
 ```mermaid
 flowchart TD
-    A["Prompt + ARGS"] --> B["Resolver START_AT"]
+    A["Prompt + ARGS"] --> B["Resolver START_AT<br/>(AUTO vira PLANNING, PLAN_REVIEW ou EXECUTION)"]
 
-    B --> C{"Modo"}
-    C -->|"EXECUTION"| X["Contexto minimo + reuso local"]
-    C -->|"PLANNING"| P0["Criar plano inicial"]
-    C -->|"PLAN_REVIEW"| P1["Ler plano existente via PLAN_SOURCE ou bloco PLAN"]
-    C -->|"AUTO"| AI["Inferir modo pelo pedido"]
-    AI --> C
+    B --> G1{"1. Rodar PLAN?"}
+    G1 -->|"sim<br/>START_AT=PLANNING"| P0["PLAN<br/>Criar ou estruturar plano"]
+    G1 -->|"nao<br/>PLAN_REVIEW ou EXECUTION"| P1["Plano ja existe<br/>ou etapa ja resolvida"]
+    P0 --> G2
+    P1 --> G2
 
-    P0 --> P2["Review adversarial do plano<br/>rodada i = 1"]
-    P1 --> P2
+    G2{"2. Rodar PLAN_REVIEW?"}
+    G2 -->|"sim<br/>PLANNING ou PLAN_REVIEW"| P2["PLAN_REVIEW<br/>review adversarial do plano<br/>rodada i = 1"]
+    G2 -->|"nao<br/>START_AT=EXECUTION"| P_SKIP["Plan review assumido<br/>resolvido/desnecessario"]
     P2 --> P3{"PLAN-ADVERSARIAL<br/>status"}
-    P3 -->|"REPLANEJAR<br/>i < PLAN_REVIEW_MAX"| P4["Ajustar plano<br/>i = i + 1"]
+    P3 -->|"REPLANEJAR<br/>i < PLAN_REVIEW_MAX"| P4["Corrigir plano<br/>i = i + 1"]
     P4 --> P2
     P3 -->|"REPLANEJAR<br/>i = PLAN_REVIEW_MAX"| PEND["PENDENTE:<br/>limite do plano atingido"]
     P3 -->|"BLOQUEADO"| PBLOCK["BLOQUEADO:<br/>precisa decisao/evidencia"]
-    P3 -->|"SATISFEITO"| P5{"Executar depois do plano?"}
+    P3 -->|"SATISFEITO"| G3
+    P_SKIP --> G3
 
-    P5 -->|"nao<br/>PLANNING default ou review-only"| PLANOUT["Finalizar com plano revisado"]
-    P5 -->|"sim<br/>PLAN_REVIEW default ou AUTO_EXECUTE_AFTER_PLAN=true"| X
+    G3{"3. Rodar EXECUTION?"}
+    G3 -->|"nao<br/>PLANNING default ou review-only"| PLANOUT["Finalizar com plano revisado"]
+    G3 -->|"sim<br/>EXECUTION, PLAN_REVIEW default<br/>ou AUTO_EXECUTE_AFTER_PLAN=true"| X["EXECUTION<br/>Contexto minimo + reuso local"]
 
     X --> D{"D[n] humano bloqueante?"}
     D -->|"sim"| DBLOCK["BLOQUEADO:<br/>pedir decisao"]
