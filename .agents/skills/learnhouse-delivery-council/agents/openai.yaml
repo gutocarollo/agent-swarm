@@ -1,0 +1,4 @@
+interface:
+  display_name: "LearnHouse Delivery Council"
+  short_description: "Orquestra entregas LearnHouse"
+  default_prompt: "Use $learnhouse-delivery-council com ARGS START_AT=AUTO, AUTO_DECIDE=true, PLAN_REVIEW_MAX=2 e EXECUTION_REVIEW_MAX=3. Para plano existente, use START_AT=PLAN_REVIEW e PLAN_SOURCE."
