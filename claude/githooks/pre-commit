@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# pre-commit (adaptador fino) — integridade referencial de renames/deletes staged.
+# Fonte única: scripts/ref-integrity.py. Bypass emergencial: git commit --no-verify
+# (o loop scheduled é o backstop — ver .claude/loop.md). Ver docs/SCHEMA.md §5.
+exec python3 "$(git rev-parse --show-toplevel)/scripts/ref-integrity.py" --staged

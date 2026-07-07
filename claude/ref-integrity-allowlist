@@ -1,0 +1,23 @@
+# ref-integrity allowlist — termos ignorados globalmente (scripts/ref-integrity.py).
+# São AUTO-OUTPUT regenerável de geradores ou backup manual do usuário: a "ausência" no
+# tree é esperada (regeneram ao rodar) e NÃO é referência quebrada de terceiro. 1 termo/linha.
+
+# saídas auto-declaradas dos geradores (apps/web/scripts/{classname-miner,inventory,triage}.mjs)
+classname-token-mining.md
+classname-token-mining.json
+inventory.json
+inventory-summary.md
+inventory-triaged.json
+triage-summary.md
+
+# output do miner v2 (gitignored) + backup manual do usuário
+classname-token-mining-v2.json
+classname-token-mining copy.json
+
+# stray deletado da raiz, mencionado só em prosa histórica de plano (ação de limpeza passada)
+context.txt
+
+# nota que EXPLICA a própria deleção (byte-idêntico), não ref navegável
+proposta-comercial-<cliente>.pdf
+# artefato de execução histórico citado em comando de plano executado (2026-05-31)
+circular.baseline.txt

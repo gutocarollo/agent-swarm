@@ -1,0 +1,95 @@
+# SCHEMA.md — como a wiki/documentação do REPOSITÓRIO funciona
+
+> Padrão: **Karpathy LLM Wiki** (gist 442a6bf), no nível do **repositório inteiro** — não só design-system.
+> Esta é a constituição da curadoria documental do LearnHouse. `docs/design-system/SCHEMA.md` é uma
+> especialização desta (regras extras de tokens/cor); em conflito, esta vence no que é transversal.
+
+## 0. Objetivo estratégico (por que isto existe)
+
+Documentação bagunçada = **IA tomando decisão errada**. Quando lixo legado e verdade atual convivem sem
+marcação temporal, o agente escolhe o documento errado em caso de ambiguidade e propaga o erro. Escalar
+desenvolvimento assistido por IA exige que **cada documento declare o que é, de quando é e se ainda vale**.
+As ferramentas adotadas servem a este fim único — repositório limpo, consistido e alinhado ao estado atual
+do código:
+
+- **Karpathy LLM Wiki** (este SCHEMA + índices + lint): organização, indexação temporal, curadoria.
+- **Boris Cherny / self-improvement loop** (`.claude/loop.md`, `tasks/lessons.md`, CLAUDE.md §16): a
+  curadoria roda em **loop contínuo**, não em mutirões pontuais.
+- **understand-anything** (`apps/.understand-anything/`): grafo de código para blast radius e para cruzar doc↔código.
+
+A curadoria é **contínua e automatizada**, não um evento. Cada sessão deixa o repo mais limpo que encontrou.
+
+## 1. Três camadas (por categoria de `docs/`)
+
+1. **Índices** — `docs/index.md` (catálogo por categoria, orientado a conteúdo) + `docs/log.md` (cronológico
+   append-only, orientado a tempo). Cada categoria (`planos/`, `auditorias/`, `adr/`, `architecture/`,
+   `design-system/`, `commercial/`, `developers/`, `reunioes/`, `qa-evidence/`) tem seu próprio índice —
+   `index.md` **ou** um `README.md` de coleção (ex.: `architecture/README.md`, `developers/README.md`); o
+   lint aceita ambos.
+2. **Conteúdo curado** — os `.md` de cada categoria, com a VERDADE ATUAL. Sub-wikis (`design-system/wiki/`)
+   quando a categoria é densa o bastante para ter páginas-verdade separadas das fontes brutas.
+3. **Schema** — este arquivo + os SCHEMA especializados por categoria + os blocos ⭐ no `.claude/CLAUDE.md`.
+
+## 2. Naming standard (obrigatório para docs novos; migração incremental para os antigos)
+
+**Base: `kebab-case` minúsculo, ASCII.** Nunca `FULL-CAPS`, nunca `Title-Case`, nunca `snake_Case`.
+Exceção única: marcadores convencionais que a comunidade espera em maiúsculas — `README.md`, `SCHEMA.md`,
+`CLAUDE.md`, `AGENTS.md`, `LICENSE`. O `index.md`/`log.md` são sempre minúsculos.
+
+**A data no NOME depende da CLASSE TEMPORAL do documento** (esta é a regra que resolve antigo-vs-recente):
+
+| Classe | Formato | Quando | Exemplos (padrão que o repo já acerta) |
+|---|---|---|---|
+| **living** (verdade atual, editado in-place) | `slug.md` **sem data** | wiki pages, specs vivas, tracking, glossário, decisões vivas | `multi-tenancy.md`, `design-system.md`, `w3c-design-tokens.md` |
+| **event** (foto de um momento, imutável depois) | `YYYY-MM-DD-slug.md` **data-PREFIXO** | auditorias, execuções, relatórios de sessão, atas, evidências | `2026-07-04-auditoria-tokens.md`, `2026-06-24-audit-visual-motion/` (qa-evidence já faz) |
+| **sequenced** (numeração estável) | `NNNN-slug.md` | ADRs (Nygard), capítulos ordenados | `0001-use-open-source-lms-base.md`, `07-conceitos-transversais.md` (adr/arc42 já fazem) |
+
+Racional das 3 classes = padrões consagrados unificados: **living** = página de wiki (slug estável, data no
+metadata — renomear ao atualizar quebraria links); **event** = post datado estilo Jekyll/Hugo (prefixo
+`YYYY-MM-DD` ordena cronologicamente no `ls`, é o que torna "antigo vs recente" óbvio a olho nu); **sequenced**
+= ADR/Nygard. Se um `slug` precisa de sufixo de versão, use `-vN` (`plano-mestre-v2.2`), nunca ` (2)` nem cópia.
+
+## 3. Frontmatter (docs curados de conteúdo, não índices)
+
+```yaml
+---
+title: Título humano curto
+status: canon | active | superseded | historico | proposta
+updated: YYYY-MM-DD          # frescor; para living docs é a verdade da data, não o nome do arquivo
+scope: <categoria>           # design-system | architecture | planos | auditorias | ...
+---
+```
+
+`status` é a classificação temporal/de-verdade: `canon` (consultar primeiro), `active` (vivo, em uso),
+`superseded` (substituído — candidato a deleção), `historico` (registro imutável de algo concluído),
+`proposta` (ainda não decidido). **Nunca marque `canon` um plano que o código atual não confirma.**
+
+## 4. Indexação TEMPORAL (norma, não opção)
+
+Todo `.md` não-estrutural aparece em **duas** listas: no `index.md` da sua categoria (por conteúdo/status) e
+no `log.md` de repo (por data, `## [YYYY-MM-DD] tipo · categoria`). Para conjuntos coesos e repetitivos
+(`relatorio-detalhado/`, `kubernetes-tutorial/`, `reports/` de uma execução), a categoria pode indexar a
+**coleção explícita** em vez de listar cada capítulo; o `README.md` da coleção passa a ser o mapa interno.
+A dupla-indexação é o que desambigua: diante de dois docs sobre o mesmo tema, o `log.md` diz qual é recente
+e o `status` diz qual vale. Sem isso, a IA (e o humano) escolhem no escuro.
+
+## 5. Ciclo Karpathy (ingest / query / lint / prune)
+
+- **Ingest** (doc/decisão nova): (1) nomeie pela classe (§2); (2) frontmatter (§3); (3) 1 entrada no
+  `log.md` de repo + no `index.md` da categoria; (4) se muda a verdade atual, atualize a página curada e
+  marque a antiga `superseded`; (5) rode o lint.
+- **Query**: comece pelo `index.md` da categoria (verdade atual). Só desça a fontes brutas para arqueologia.
+- **Lint**: `python3 scripts/docs-wiki-lint.py` — todo `.md`/asset citado no índice+log (FAIL) + naming §2
+  (WARN, migração incremental; `--strict-naming` para bloquear). Integridade referencial de renames/deletes:
+  `python3 scripts/ref-integrity.py --range <base>..HEAD` (também roda no pre-commit `.githooks/` e no loop).
+- **Prune** (política desde 2026-07-07): **git é o arquivo.** Doc `superseded`/`historico` resolvido, PDF
+  render, JSON regenerável e print de QA são REMOVIDOS do working tree (recuperáveis via
+  `git log --diff-filter=D --summary -- docs/`); o `log.md` preserva o registro temporal do que saiu.
+  Prints de evidência vivem em `.claude/evidence/` (skill `ui-evidence`), nunca soltos em `docs/`.
+
+## 6. Operação
+
+- Skill orquestradora: **`repo-wiki-curator`** (`.claude/skills/` + espelho `.agents/skills/`).
+- Loop contínuo: `.claude/loop.md` (curadoria do repo inteiro).
+- Sub-schema especializado: `docs/design-system/SCHEMA.md` (pares coloridos, mining className).
+- Fonte da verdade do CÓDIGO (não é doc): `apps/web/styles/globals.css`, migrations, os próprios fontes.
