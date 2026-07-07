@@ -34,10 +34,15 @@ categoria, com sub-schema próprio em `docs/design-system/SCHEMA.md`).
    confira contra o código real (o doc mente? o código confirma?).
 3. **Naming:** renomeie violações com `git mv` (preserva história), **uma por vez**, atualizando TODAS as
    refs a ela (`grep -rl` no repo) antes de seguir — migração sequencial (LEI ZERO §6), nunca batch.
+   Após a passada de renames/deletes, valide com `python3 scripts/ref-integrity.py --range <base>..HEAD`
+   (detector git-aware de refs órfãs; protocolo de correção na skill `ref-integrity`) — é o guard que
+   pega a citação esquecida que o `grep -rl` manual deixou passar.
 4. Atualize `index.md` (categoria) + `docs/log.md` (`## [YYYY-MM-DD] tipo · categoria`, append-only).
 5. Sub-wiki densa (design-system): atualize também `wiki/` e o SCHEMA especializado.
 6. Prune o superseded/resolvido (git rm) e registre no log.
 7. `python3 scripts/docs-wiki-lint.py` — deve ficar verde (ou justificar exceção no próprio script).
+   Se a passada renomeou/deletou arquivos: `python3 scripts/ref-integrity.py --range <base>..HEAD`
+   também verde (o pre-commit `.githooks/` re-checa no commit; o loop roda `--since` como backstop).
 
 ## Saída esperada
 
@@ -45,7 +50,8 @@ categoria, com sub-schema próprio em `docs/design-system/SCHEMA.md`).
 - docs renomeados (de→para) e refs atualizadas;
 - docs pruned (com como recuperar via git);
 - backlog de naming restante (o que fica para próximas passadas do loop);
-- resultado de `python3 scripts/docs-wiki-lint.py`.
+- resultado de `python3 scripts/docs-wiki-lint.py`;
+- resultado de `python3 scripts/ref-integrity.py --range <base>..HEAD` quando houve rename/delete.
 
 ## Guardrail
 

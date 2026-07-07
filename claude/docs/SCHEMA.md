@@ -80,8 +80,12 @@ e o `status` diz qual vale. Sem isso, a IA (e o humano) escolhem no escuro.
   marque a antiga `superseded`; (5) rode o lint.
 - **Query**: comece pelo `index.md` da categoria (verdade atual). Só desça a fontes brutas para arqueologia.
 - **Lint**: `python3 scripts/docs-wiki-lint.py` — todo `.md`/asset citado no índice+log (FAIL) + naming §2
-  (WARN, migração incremental; `--strict-naming` para bloquear). Integridade referencial de renames/deletes:
-  `python3 scripts/ref-integrity.py --range <base>..HEAD` (também roda no pre-commit `.githooks/` e no loop).
+  (WARN, migração incremental; `--strict-naming` para bloquear) + índice vivo linkando `_arquivo/`
+  (WARN de wayfinding — confira se o ponteiro ao arquivo é rotulado). Integridade referencial de
+  renames/deletes: `python3 scripts/ref-integrity.py --range <base>..HEAD` — links markdown mortos
+  (ignora exemplos em code fence; resolve `%20`/acento) + citações a nomes renomeados/deletados.
+  `--selftest` roda o teste negativo do próprio detector. Também roda no pre-commit `.githooks/`, no
+  loop e no CI (`.github/workflows/docs-integrity.yaml`, backstop de `--no-verify`/clone sem hook).
 - **Prune** (política desde 2026-07-07): **git é o arquivo.** Doc `superseded`/`historico` resolvido, PDF
   render, JSON regenerável e print de QA são REMOVIDOS do working tree (recuperáveis via
   `git log --diff-filter=D --summary -- docs/`); o `log.md` preserva o registro temporal do que saiu.

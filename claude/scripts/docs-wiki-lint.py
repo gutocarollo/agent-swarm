@@ -71,6 +71,27 @@ def collection_mentioned(rel: Path, corpus: str) -> bool:
     return False
 
 
+FOREIGN_LIVE_FORBIDDEN = ("_arquivo/",)
+
+
+def check_no_foreign_live_links(base: Path) -> list[str]:
+    """Índice vivo (`index.md`) que linka `_arquivo/`. Padrão portado do slim-shape, onde é FAIL
+    (lá o índice nunca aponta para o arquivo). No learnhouse é **WARN**: os índices usam links a
+    `_arquivo/` como WAYFINDING rotulado ("históricos/superados/reuniões passadas →" / "prova em"),
+    que é prática Karpathy correta — falso-FAIL treinaria o time a ignorar o gate. WARN surfacia
+    para o olho humano na curadoria sem quebrar o verde. `log.md` isento (registro do que saiu)."""
+    errs: list[str] = []
+    for idx in sorted(base.rglob("index.md")):
+        if any(part in IGNORED_DIRS for part in idx.relative_to(DOCS).parts):
+            continue
+        rel = idx.relative_to(DOCS)
+        for m in re.finditer(r"\]\(([^)]+)\)", idx.read_text(encoding="utf-8")):
+            tgt = m.group(1).split("#")[0].strip().lstrip("./")
+            if any(tok in tgt for tok in FOREIGN_LIVE_FORBIDDEN):
+                errs.append(f"índice vivo linka fonte arquivada: {rel} -> {m.group(1)}")
+    return errs
+
+
 def naming_ok(rel: Path) -> bool:
     name = rel.name
     if name in CAPS_OK or name in {"index.md", "log.md"}:
@@ -111,6 +132,8 @@ def main() -> int:
         if f.suffix == ".md" and not naming_ok(rel):
             naming_warns.append(f"naming fora do padrão §2: {rel}")
 
+    foreign_warns = check_no_foreign_live_links(base)
+
     if strict_naming:
         failures.extend(naming_warns)
         naming_warns = []
@@ -121,6 +144,11 @@ def main() -> int:
             print(f"  ~ {w}")
         if len(naming_warns) > 60:
             print(f"  ... +{len(naming_warns) - 60} outros")
+
+    if foreign_warns:
+        print(f"docs-wiki-lint: {len(foreign_warns)} índice(s) vivo(s) linkando _arquivo/ (WARN — confira se é wayfinding rotulado):")
+        for w in foreign_warns:
+            print(f"  ~ {w}")
 
     if failures:
         print("docs-wiki-lint: FAIL")

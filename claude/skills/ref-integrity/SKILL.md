@@ -24,12 +24,16 @@ python3 scripts/ref-integrity.py --range <BASE>..HEAD
 python3 scripts/ref-integrity.py --since <ref>
 # o que está staged agora (o mesmo que o pre-commit roda)
 python3 scripts/ref-integrity.py --staged
+# teste negativo do próprio detector (link morto real DEVE flagar; em code fence NÃO)
+python3 scripts/ref-integrity.py --selftest
 # saída máquina
 python3 scripts/ref-integrity.py --range <BASE>..HEAD --json
 ```
 
 Exit 1 = há referência quebrada; 0 = limpo. Duas checagens: `[link]` (link markdown que não resolve) e
-`[stale]` (citação viva a nome/path de arquivo renomeado/deletado no diff).
+`[stale]` (citação viva a nome/path de arquivo renomeado/deletado no diff). Link/citação DENTRO de
+code fence (` ``` `) é exemplo — não flaga (`blank_code_fences`); link com espaço/acento resolve por
+`%20`/unquote. O CI (`.github/workflows/docs-integrity.yaml`) roda `--selftest` + o range do push.
 
 ## O que fazer com cada achado
 

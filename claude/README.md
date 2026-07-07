@@ -23,4 +23,5 @@ append-only `## [YYYY-MM-DD] tipo · categoria`) está especificado em `docs/SCH
 | `skills/adversarial-review/SKILL.md` | `.claude/skills/` | Contrato da review adversarial (classes de prova por hipótese); self-review inline proibido — vira o prompt do subagent |
 | `hooks/lessons-inject.sh` | `.claude/hooks/` | SessionStart hook: injeta `tasks/lessons.md` em toda sessão nova (self-improvement §16) |
 | `tasks/lessons.md` | `tasks/` | Exemplo real do ciclo capturar → injetar → promover (lições `[PROMOVIDA → destino]`) |
+| `github-workflows/docs-integrity.yaml` | `.github/workflows/docs-integrity.yaml` | Consumidor 4 (CI): backstop de `--no-verify`/clone sem hook — roda wiki-lint + `ref-integrity --selftest` + range do push |
 | `CLAUDE.md` | `.claude/CLAUDE.md` | Curado para publicação: bloco wiki Karpathy, bloco council, LEI ZERO (não reinventar), §14 consistência DRY, §15 workflow orchestration (Boris Cherny), §16 self-improvement loop |

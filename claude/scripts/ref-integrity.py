@@ -35,12 +35,35 @@ import os
 import re
 import subprocess
 import sys
+import urllib.parse
 
 ALLOW_EXT = {".md", ".json", ".txt", ".py", ".sh", ".toml", ".mjs", ".ts",
              ".tsx", ".css", ".yaml", ".yml", ".snyk"}
 GENERIC_BASENAMES = {"index.md", "log.md", "readme.md", "schema.md", "__init__.py",
                      "config.json", "package.json", "utils.py", "types.ts"}
 LINK_RE = re.compile(r"\]\(\s*([^)\s]+)")
+
+
+def _fence_flags(text: str) -> list[bool]:
+    """1:1 com `text.splitlines()`: True se a linha está dentro de (ou é o marcador de) um code fence.
+    Fonte única da lógica de fence — não passa por join/splitlines (evita perder linha em branco final)."""
+    flags: list[bool] = []
+    in_fence = False
+    for line in text.splitlines():
+        s = line.lstrip()
+        if s.startswith("```") or s.startswith("~~~"):
+            in_fence = not in_fence
+            flags.append(True)  # o próprio marcador de fence também é zerado
+        else:
+            flags.append(in_fence)
+    return flags
+
+
+def blank_code_fences(text: str) -> str:
+    """Zera o conteúdo de blocos ``` / ~~~ (1:1 por linha). Link/citação DENTRO de fence é EXEMPLO
+    de código, não referência navegável — não deve flagar (padrão portado do slim-shape)."""
+    lines = text.splitlines()
+    return "\n".join("" if fl else ln for ln, fl in zip(lines, _fence_flags(text)))
 
 
 def sh(args: list[str]) -> str:
@@ -94,8 +117,12 @@ def tracked_files() -> list[str]:
 
 
 def exists_in_index(relpath: str) -> bool:
-    return subprocess.run(["git", "cat-file", "-e", f":{relpath}"],
-                          capture_output=True).returncode == 0
+    if subprocess.run(["git", "cat-file", "-e", f":{relpath}"],
+                      capture_output=True).returncode == 0:
+        return True
+    # diretório não é blob endereçável por `:path`; existe no index se há arquivo tracked sob ele
+    # (senão link a dir — `sources/dracula-theme/` — vira falso-positivo só no modo --staged).
+    return bool(sh(["git", "ls-files", "--", f"{relpath}/"]).strip())
 
 
 def path_exists(rel: str, cached: bool) -> bool:
@@ -135,6 +162,23 @@ def git_grep(term: str, cached: bool) -> list[tuple[str, int, str]]:
     return hits
 
 
+_blank_cache: dict = {}
+
+
+def _in_fence(f: str, ln: int, cached: bool) -> bool:
+    """True se a linha `ln` de `f` está dentro de um code fence (só se aplica a .md). Usa flags 1:1
+    (não o texto blanked round-tripped) — a última linha do arquivo é indexada corretamente."""
+    key = (f, cached)
+    if key not in _blank_cache:
+        try:
+            text = sh(["git", "show", f":{f}"]) if cached else open(os.path.join(ROOT, f), encoding="utf-8").read()
+        except OSError:
+            text = ""
+        _blank_cache[key] = _fence_flags(text)
+    fl = _blank_cache[key]
+    return 1 <= ln <= len(fl) and fl[ln - 1]
+
+
 def check_stale_citations(diff_args, cached, tracked_bases, allow) -> list[dict]:
     findings: list[dict] = []
     seen = set()
@@ -146,6 +190,8 @@ def check_stale_citations(diff_args, cached, tracked_bases, allow) -> list[dict]
             continue
         for f, ln, content in git_grep(term, cached):
             if not has_allowed_ext(f) or is_historical(f) or f == new:
+                continue
+            if f.endswith(".md") and _in_fence(f, ln, cached):
                 continue
             # token isolado (não sufixo/prefixo de nome maior, ex. e01-leaderboard.png)
             m2 = re.search(r"(?<![\w-])(" + PATH_TOKEN + re.escape(term) + PATH_TOKEN + r")(?![\w-])", content)
@@ -175,6 +221,28 @@ def _md_targets(text: str):
                 yield i, tgt, line
 
 
+def _resolve_link(f: str, tgt: str, staged: bool) -> bool:
+    tgt = urllib.parse.unquote(tgt)  # link com espaço/acento (%20) resolve para o nome real no disco
+    # tenta dir-relativo E repo-relativo (docs citam paths repo-relativos sem '/' inicial)
+    if tgt.startswith("/"):
+        cands = [tgt.lstrip("/")]
+    else:
+        cands = [os.path.normpath(os.path.join(os.path.dirname(f), tgt)), os.path.normpath(tgt)]
+    cands = [c for c in cands if c and not c.startswith("..")]
+    return any((exists_in_index(c) if staged else os.path.exists(os.path.join(ROOT, c))) for c in cands)
+
+
+def _scan_md_text(f: str, text: str, staged: bool, allow: set[str]) -> list[dict]:
+    findings: list[dict] = []
+    for ln, tgt, line in _md_targets(blank_code_fences(text)):  # link em fence é exemplo, não navega
+        if tgt in allow:
+            continue
+        if not _resolve_link(f, tgt, staged):
+            findings.append({"check": "broken-md-link", "file": f, "line": ln,
+                             "target": tgt, "snippet": line.strip()[:120]})
+    return findings
+
+
 def check_md_links(staged: bool, allow: set[str]) -> list[dict]:
     findings: list[dict] = []
     if staged:
@@ -189,21 +257,36 @@ def check_md_links(staged: bool, allow: set[str]) -> list[dict]:
             text = sh(["git", "show", f":{f}"]) if staged else open(os.path.join(ROOT, f), encoding="utf-8").read()
         except OSError:
             continue
-        for ln, tgt, line in _md_targets(text):
-            if tgt in allow:
-                continue
-            # tenta dir-relativo E repo-relativo (docs citam paths repo-relativos sem '/' inicial)
-            if tgt.startswith("/"):
-                cands = [tgt.lstrip("/")]
-            else:
-                cands = [os.path.normpath(os.path.join(os.path.dirname(f), tgt)),
-                         os.path.normpath(tgt)]
-            cands = [c for c in cands if c and not c.startswith("..")]
-            ok = any((exists_in_index(c) if staged else os.path.exists(os.path.join(ROOT, c))) for c in cands)
-            if not ok:
-                findings.append({"check": "broken-md-link", "file": f, "line": ln,
-                                 "target": tgt, "snippet": line.strip()[:120]})
+        findings += _scan_md_text(f, text, staged, allow)
     return findings
+
+
+def selftest() -> int:
+    """Teste negativo institucionalizado (lição: guard só conta depois de VER o FAIL). Cria 2 .md
+    temporários em docs/: um com link morto real (DEVE flagar) e um com o mesmo link morto SÓ dentro
+    de code fence (NÃO deve flagar — valida blank_code_fences). Restaura o estado ao fim."""
+    d = os.path.join(ROOT, "docs")
+    os.makedirs(d, exist_ok=True)
+    dead = os.path.join(d, ".selftest-ref-dead.md")
+    fenced = os.path.join(d, ".selftest-ref-fence.md")
+    open(dead, "w", encoding="utf-8").write("[x](./nao-existe-zzz-selftest.md)\n")
+    open(fenced, "w", encoding="utf-8").write("```\n[x](./nao-existe-zzz-selftest.md)\n```\n")
+    ok = True
+    try:
+        rel_dead, rel_fenced = os.path.relpath(dead, ROOT), os.path.relpath(fenced, ROOT)
+        if not _scan_md_text(rel_dead, open(dead, encoding="utf-8").read(), False, set()):
+            print("SELFTEST FAIL: link morto não detectado"); ok = False
+        else:
+            print("selftest: link morto detectado — OK")
+        if _scan_md_text(rel_fenced, open(fenced, encoding="utf-8").read(), False, set()):
+            print("SELFTEST FAIL: link em code fence flagado (blank_code_fences quebrado)"); ok = False
+        else:
+            print("selftest: link em code fence ignorado — OK")
+    finally:
+        os.remove(dead)
+        os.remove(fenced)
+    print("ref-integrity --selftest: PASS" if ok else "ref-integrity --selftest: FAIL")
+    return 0 if ok else 1
 
 
 def main() -> int:
@@ -212,8 +295,12 @@ def main() -> int:
     g.add_argument("--staged", action="store_true", help="pre-commit: staged + index")
     g.add_argument("--range", metavar="A..B", help="skill: range de commits")
     g.add_argument("--since", metavar="REF", help="loop: REF..HEAD")
+    g.add_argument("--selftest", action="store_true", help="teste negativo do próprio detector")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
+
+    if a.selftest:
+        return selftest()
 
     allow = load_allowlist()
     tracked_bases = {os.path.basename(p) for p in tracked_files()}

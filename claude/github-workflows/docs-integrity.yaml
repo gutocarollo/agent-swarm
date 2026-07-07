@@ -1,0 +1,52 @@
+name: docs-integrity
+
+# Backstop de CI para a wiki Karpathy: pega o que escapa do pre-commit (.githooks/) quando
+# alguém commita com `--no-verify` ou clona sem rodar `git config core.hooksPath .githooks`.
+# Fluxo do repo é commit direto na main (sem PR), então dispara no push.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '**/*.md'
+      - 'scripts/docs-wiki-lint.py'
+      - 'scripts/ref-integrity.py'
+      - '.ref-integrity-allowlist'
+  pull_request:
+    paths:
+      - 'docs/**'
+      - '**/*.md'
+      - 'scripts/docs-wiki-lint.py'
+      - 'scripts/ref-integrity.py'
+      - '.ref-integrity-allowlist'
+
+jobs:
+  docs-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Wiki lint (órfãos sem índice + naming §2 + wayfinding)
+        run: python3 scripts/docs-wiki-lint.py
+      - name: Ref-integrity — self-test do detector
+        run: python3 scripts/ref-integrity.py --selftest
+      - name: Ref-integrity — refs quebradas nos commits do push
+        if: github.event_name == 'push'
+        env:
+          EVENT_BEFORE: ${{ github.event.before }}
+        run: |
+          BASE="$EVENT_BEFORE"
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+            BASE="$(git rev-parse HEAD~1 2>/dev/null || git rev-parse HEAD)"
+          fi
+          python3 scripts/ref-integrity.py --range "${BASE}..HEAD"
+      - name: Ref-integrity — refs quebradas no diff do PR
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: python3 scripts/ref-integrity.py --range "origin/${BASE_REF}..HEAD"
